@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wterm - マルチセッションターミナル</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- ヘッダー -->
+    <header class="header">
+      <div class="header-left">
+        <h1 class="logo">wterm</h1>
+        <button id="btn-new-session" class="btn btn-primary">
+          <span class="icon">+</span> 新規セッション
+        </button>
+        <div class="dropdown">
+          <button id="btn-shortcuts" class="btn">
+            <span class="icon">⚡</span> ショートカット
+            <span class="arrow">▼</span>
+          </button>
+          <div id="shortcuts-menu" class="dropdown-menu"></div>
+        </div>
+      </div>
+      <div class="header-right">
+        <button id="btn-toggle-view" class="btn" title="レイアウト切替 (Ctrl+Shift+L)">
+          <span class="icon">⊞</span>
+        </button>
+        <button id="btn-settings" class="btn" title="設定">
+          <span class="icon">⚙</span>
+        </button>
+        <span id="connection-status" class="status status-disconnected">
+          切断中
+        </span>
+      </div>
+    </header>
+
+    <!-- メインコンテンツ -->
+    <div class="main-container">
+      <!-- サイドバー（セッション一覧） -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-header">
+          <span>セッション</span>
+          <button id="btn-toggle-sidebar" class="btn-icon" title="サイドバーを閉じる">
+            ◀
+          </button>
+        </div>
+        <ul id="session-list" class="session-list"></ul>
+      </aside>
+
+      <!-- ターミナルエリア -->
+      <div class="terminal-area">
+        <!-- タブバー -->
+        <div id="tab-bar" class="tab-bar">
+          <div id="tabs" class="tabs"></div>
+        </div>
+
+        <!-- ターミナルコンテナ -->
+        <div id="terminal-container" class="terminal-container">
+          <div id="welcome-message" class="welcome-message">
+            <p>新しいセッションを作成してください</p>
+            <p>ショートカットから素早くセッションを開始できます</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 履歴パネル -->
+      <aside id="history-panel" class="history-panel">
+        <div class="panel-header">
+          <span>📨 受信履歴</span>
+          <button id="btn-toggle-history" class="btn-icon" title="履歴パネルを閉じる">
+            ▼
+          </button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+      </aside>
+    </div>
+
+    <!-- ステータスバー -->
+    <footer class="status-bar">
+      <span id="status-sessions">セッション: 0</span>
+      <span id="status-active">アクティブ: なし</span>
+    </footer>
+  </div>
+
+  <!-- 設定ダイアログ -->
+  <dialog id="settings-dialog" class="dialog">
+    <div class="dialog-header">
+      <h2>設定</h2>
+      <button id="btn-close-settings" class="btn-icon">✕</button>
+    </div>
+    <div class="dialog-content">
+      <section class="settings-section">
+        <h3>UIレイアウト</h3>
+        <label>
+          <input type="checkbox" id="setting-sidebar" checked>
+          サイドバーを表示
+        </label>
+        <label>
+          <input type="checkbox" id="setting-history" checked>
+          履歴パネルを表示
+        </label>
+        <label>
+          サイドバー位置:
+          <select id="setting-sidebar-position">
+            <option value="left">左</option>
+            <option value="right">右</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3>ショートカット管理</h3>
+        <ul id="shortcut-list" class="shortcut-list"></ul>
+        <button id="btn-add-shortcut" class="btn btn-secondary">
+          + ショートカット追加
+        </button>
+      </section>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-save-settings" class="btn btn-primary">保存</button>
+      <button id="btn-cancel-settings" class="btn">キャンセル</button>
+    </div>
+  </dialog>
+
+  <!-- ショートカット編集ダイアログ -->
+  <dialog id="shortcut-dialog" class="dialog">
+    <div class="dialog-header">
+      <h2 id="shortcut-dialog-title">ショートカット追加</h2>
+      <button id="btn-close-shortcut" class="btn-icon">✕</button>
+    </div>
+    <div class="dialog-content">
+      <label>
+        ID:
+        <input type="text" id="shortcut-id" placeholder="例: my-tool">
+      </label>
+      <label>
+        名前:
+        <input type="text" id="shortcut-name" placeholder="例: My Tool">
+      </label>
+      <label>
+        コマンド:
+        <input type="text" id="shortcut-command" placeholder="例: npm run start">
+      </label>
+      <label>
+        アイコン:
+        <input type="text" id="shortcut-icon" placeholder="例: 🚀">
+      </label>
+    </div>
+    <div class="dialog-footer">
+      <button id="btn-save-shortcut" class="btn btn-primary">保存</button>
+      <button id="btn-cancel-shortcut" class="btn">キャンセル</button>
+    </div>
+  </dialog>
+
+  <!-- コンテキストメニュー -->
+  <div id="context-menu" class="context-menu" style="display: none;">
+    <div class="context-menu-item" data-action="split-vertical">縦に分割</div>
+    <div class="context-menu-item" data-action="split-horizontal">横に分割</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="restart">再起動</div>
+    <div class="context-menu-item" data-action="delete">セッション削除</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

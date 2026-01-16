@@ -1,0 +1,23 @@
+{
+  "name": "wterm",
+  "version": "1.0.0",
+  "description": "マルチセッションターミナル - AIエージェント間通信対応",
+  "type": "module",
+  "main": "src/server.ts",
+  "scripts": {
+    "start": "tsx src/server.ts",
+    "dev": "tsx watch src/server.ts",
+    "start:bun": "bun run src/server.ts",
+    "dev:bun": "bun --watch run src/server.ts"
+  },
+  "dependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/ws": "^8.5.10",
+    "tsx": "^4.7.0",
+    "typescript": "^5.0.0"
+  }
+}
