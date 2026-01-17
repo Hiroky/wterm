@@ -337,9 +337,10 @@ const inputBuffers = new Map<string, string>();
  */
 function attachPtyErrorHandler(session: Session, ptyProcess: pty.IPty): void {
   // node-pty (Windows) は error リスナーが2つ未満だと throw するため、noop を追加
-  ptyProcess.on('error', () => {});
+  // IPty型にonメソッドがないため、anyにキャスト
+  (ptyProcess as any).on('error', () => {});
 
-  ptyProcess.on('error', (e: unknown) => {
+  (ptyProcess as any).on('error', (e: unknown) => {
     const err = e as { code?: string; message?: string } | undefined;
     const isSocketClosed =
       err?.code === 'ERR_SOCKET_CLOSED' ||
@@ -487,7 +488,7 @@ async function handleInternalCommand(sessionId: string, command: string): Promis
 /**
  * セッションに入力を送信
  */
-export function writeToSession(sessionId: string, data: string): boolean {
+export async function writeToSession(sessionId: string, data: string): Promise<boolean> {
   const session = sessions.get(sessionId);
   if (!session || session.status !== 'running') {
     return false;
@@ -495,13 +496,13 @@ export function writeToSession(sessionId: string, data: string): boolean {
 
   // 入力バッファを管理（コマンド検出用）
   let buffer = inputBuffers.get(sessionId) || '';
-  
+
   for (const char of data) {
     if (char === '\r' || char === '\n') {
       // Enter押下時にコマンドをチェック
       const command = buffer.trim();
       if (command.startsWith('/')) {
-        if (handleInternalCommand(sessionId, command)) {
+        if (await handleInternalCommand(sessionId, command)) {
           // 内部コマンドとして処理された場合、改行のみ送信
           safeWrite(session, '\r\n');
           buffer = '';

@@ -334,7 +334,7 @@ async function handleConfigUpdate(req: any, res: any, corsHeaders: { [key: strin
 /**
  * WebSocketメッセージを処理
  */
-function handleWebSocketMessage(clientId: string, message: ClientMessage): void {
+async function handleWebSocketMessage(clientId: string, message: ClientMessage): Promise<void> {
   const client = wsClients.get(clientId);
   if (!client) return;
 
@@ -370,7 +370,7 @@ function handleWebSocketMessage(clientId: string, message: ClientMessage): void 
     }
 
     case 'input': {
-      writeToSession(message.sessionId, message.data);
+      await writeToSession(message.sessionId, message.data);
       break;
     }
 
@@ -405,10 +405,10 @@ wss.on('connection', (ws: WebSocket) => {
     );
   }
 
-  ws.on('message', (data: Buffer) => {
+  ws.on('message', async (data: Buffer) => {
     try {
       const parsed = JSON.parse(data.toString()) as ClientMessage;
-      handleWebSocketMessage(clientId, parsed);
+      await handleWebSocketMessage(clientId, parsed);
     } catch (e) {
       console.error('WebSocketメッセージ解析エラー:', e);
     }
