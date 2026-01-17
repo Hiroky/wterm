@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // wterm-send - セッション間メッセージ送信コマンド
 
 const apiUrl = process.env.WTERM_API_URL;

@@ -1,2 +1,2 @@
 @echo off
-bun "%~dp0wterm-send.js" %*
+node "%~dp0wterm-send.js" %*

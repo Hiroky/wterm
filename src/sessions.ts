@@ -53,8 +53,16 @@ export function createSession(command: string = ''): Session {
     PATH: `${process.env.PATH};${getBinPath()}`,
   };
 
-  // PowerShellを起動
-  const ptyProcess = pty.spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NoExit'], {
+  const binPath = getBinPath();
+
+  // PowerShellを起動（環境変数を-Commandで設定）
+  const ptyProcess = pty.spawn('powershell.exe', [
+    '-NoLogo',
+    '-NoProfile',
+    '-NoExit',
+    '-Command',
+    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'`
+  ], {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
@@ -237,8 +245,16 @@ export function restartSession(sessionId: string): boolean {
     PATH: `${process.env.PATH};${getBinPath()}`,
   };
 
-  // 新しいPTYを起動
-  const ptyProcess = pty.spawn('powershell.exe', ['-NoLogo', '-NoProfile', '-NoExit'], {
+  const binPath = getBinPath();
+
+  // 新しいPTYを起動（環境変数を-Commandで設定）
+  const ptyProcess = pty.spawn('powershell.exe', [
+    '-NoLogo',
+    '-NoProfile',
+    '-NoExit',
+    '-Command',
+    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'`
+  ], {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,

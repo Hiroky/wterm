@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // wterm-list - アクティブセッション一覧表示コマンド
 
 const apiUrl = process.env.WTERM_API_URL;

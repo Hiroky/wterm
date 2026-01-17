@@ -1,4 +1,4 @@
-#!/usr/bin/env bun
+#!/usr/bin/env node
 // wterm-broadcast - 全セッションへメッセージ送信コマンド
 
 const apiUrl = process.env.WTERM_API_URL;
