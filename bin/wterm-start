@@ -1,0 +1,72 @@
+#!/bin/bash
+# wterm-start - 新しいセッション作成コマンド（WSL版）
+
+WTERM_API_URL="${WTERM_API_URL}"
+
+if [ -z "$WTERM_API_URL" ]; then
+  echo "エラー: WTERM_API_URL 環境変数が設定されていません" >&2
+  echo "このコマンドはwterm内のセッションから実行してください" >&2
+  exit 1
+fi
+
+# 引数を結合してコマンドにする
+COMMAND="$*"
+
+# カレントディレクトリを取得し、WSLパスをWindowsパスに変換
+CWD=$(pwd)
+if command -v wslpath &> /dev/null; then
+  CWD=$(wslpath -w "$CWD")
+fi
+
+# WSL2対応: localhostをWindowsホストのIPアドレスに置き換え
+if [[ "$WTERM_API_URL" == *"localhost"* ]]; then
+  # ip routeコマンドでWindowsホストのIPアドレスを取得（推奨）
+  if command -v ip &> /dev/null; then
+    WINDOWS_HOST=$(ip route show default | awk '{print $3}' | head -1)
+  fi
+  # フォールバック: /etc/resolv.confから取得
+  if [ -z "$WINDOWS_HOST" ] && [ -f /etc/resolv.conf ]; then
+    WINDOWS_HOST=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}' | head -1)
+  fi
+  if [ -n "$WINDOWS_HOST" ]; then
+    WTERM_API_URL="${WTERM_API_URL/localhost/$WINDOWS_HOST}"
+  fi
+fi
+
+# JSONエスケープ処理（バックスラッシュとダブルクォートをエスケープ）
+COMMAND_ESCAPED=$(echo "$COMMAND" | sed 's/\\/\\\\/g; s/"/\\"/g')
+CWD_ESCAPED=$(echo "$CWD" | sed 's/\\/\\\\/g; s/"/\\"/g')
+
+# APIリクエストを送信
+RESPONSE=$(curl -s -w "\n%{http_code}" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"command\":\"$COMMAND_ESCAPED\",\"cwd\":\"$CWD_ESCAPED\"}" \
+  "$WTERM_API_URL/api/sessions")
+
+# HTTPステータスコードを取得
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | head -n-1)
+
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "エラー: HTTPリクエスト失敗 (HTTP $HTTP_CODE)" >&2
+  ERROR_MSG=$(echo "$BODY" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
+  if [ -n "$ERROR_MSG" ]; then
+    echo "詳細: $ERROR_MSG" >&2
+  fi
+  if [ -n "$BODY" ]; then
+    echo "レスポンス: $BODY" >&2
+  fi
+  exit 1
+fi
+
+# JSONレスポンスを解析してsessionIdを取得
+SESSION_ID=$(echo "$BODY" | grep -o '"sessionId":"[^"]*"' | cut -d'"' -f4)
+
+if [ -z "$SESSION_ID" ]; then
+  ERROR_MSG=$(echo "$BODY" | grep -o '"error":"[^"]*"' | cut -d'"' -f4)
+  echo "エラー: ${ERROR_MSG:-セッション作成に失敗しました}" >&2
+  exit 1
+fi
+
+echo "新しいセッションを作成しました: $SESSION_ID"

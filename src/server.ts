@@ -269,7 +269,8 @@ async function handleCreateSession(req: any, res: any, corsHeaders: { [key: stri
     const body = await readBody(req);
     const parsed = JSON.parse(body);
     const command = parsed.command || '';
-    const session = createSession(command);
+    const cwd = parsed.cwd;
+    const session = createSession(command, cwd);
     res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ sessionId: session.id }));
   } catch (e) {

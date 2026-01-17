@@ -41,7 +41,7 @@ function getBinPath(): string {
 /**
  * 新しいセッションを作成
  */
-export function createSession(command: string = ''): Session {
+export function createSession(command: string = '', cwd?: string): Session {
   const config = getConfig();
   const sessionId = generateSessionId();
 
@@ -68,7 +68,7 @@ export function createSession(command: string = ''): Session {
     name: 'xterm-256color',
     cols: 120,
     rows: 30,
-    cwd: process.cwd(),
+    cwd: cwd || process.cwd(),
     env: env as { [key: string]: string },
   });
 
@@ -429,17 +429,30 @@ async function handleInternalCommand(sessionId: string, command: string): Promis
       safeWrite(session, '\r\n');
       safeWrite(session, 'アクティブセッション一覧:\r\n');
       safeWrite(session, '─'.repeat(50) + '\r\n');
-      
+
       sessions.forEach((s) => {
         const status = s.status === 'running' ? '🟢' : '🔴';
         const current = s.id === sessionId ? ' (現在)' : '';
         const cmd = s.command || 'PowerShell';
         const exitInfo = s.status === 'exited' ? ` [exit: ${s.exitCode}]` : '';
-        
+
         safeWrite(session, `  ${status} ${s.id}${current}\r\n`);
         safeWrite(session, `     コマンド: ${cmd}${exitInfo}\r\n`);
         safeWrite(session, '\r\n');
       });
+    }
+    return true;
+  }
+
+  // /start コマンド
+  const startMatch = command.match(/^\/start(?:\s+(.+))?$/);
+  if (startMatch) {
+    const cmd = startMatch[1] || '';
+    const newSession = createSession(cmd);
+
+    const session = sessions.get(sessionId);
+    if (session && session.status === 'running') {
+      safeWrite(session, `\r\n✓ 新しいセッションを作成しました: ${newSession.id}\r\n`);
     }
     return true;
   }
@@ -454,6 +467,7 @@ async function handleInternalCommand(sessionId: string, command: string): Promis
       safeWrite(session, '  /send <session-id> <message>  - 指定セッションにメッセージ送信\r\n');
       safeWrite(session, '  /broadcast <message>          - 全セッションにメッセージ送信\r\n');
       safeWrite(session, '  /list                         - アクティブセッション一覧\r\n');
+      safeWrite(session, '  /start [command]              - 新しいセッションを作成\r\n');
       safeWrite(session, '  /help                         - このヘルプを表示\r\n');
       safeWrite(session, '\r\n');
       safeWrite(session, 'CLIコマンド (PowerShellから実行):\r\n');
@@ -461,6 +475,7 @@ async function handleInternalCommand(sessionId: string, command: string): Promis
       safeWrite(session, '  wterm-send <session-id> <message>\r\n');
       safeWrite(session, '  wterm-broadcast <message>\r\n');
       safeWrite(session, '  wterm-list\r\n');
+      safeWrite(session, '  wterm-start [command]         - カレントディレクトリを引き継いで新セッション作成\r\n');
       safeWrite(session, '\r\n');
     }
     return true;

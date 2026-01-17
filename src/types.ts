@@ -78,6 +78,7 @@ export interface SessionInfo {
 // API リクエスト/レスポンス型
 export interface CreateSessionRequest {
   command?: string;
+  cwd?: string;
 }
 
 export interface CreateSessionResponse {

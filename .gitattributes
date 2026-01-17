@@ -1,0 +1,36 @@
+# デフォルト: すべてのテキストファイルはLFに正規化
+* text=auto eol=lf
+
+# Windows用バッチファイルはCRLFを維持
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# シェルスクリプトは明示的にLF
+*.sh text eol=lf
+
+# TypeScript, JavaScript, JSON
+*.ts text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+
+# Markdown, テキスト
+*.md text eol=lf
+*.txt text eol=lf
+
+# HTML, CSS
+*.html text eol=lf
+*.css text eol=lf
+
+# bin/配下の拡張子なしファイル（WSL用Bashスクリプト）は明示的にLF
+bin/wterm-send text eol=lf
+bin/wterm-broadcast text eol=lf
+bin/wterm-list text eol=lf
+bin/wterm-start text eol=lf
+
+# バイナリファイル
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
