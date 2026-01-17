@@ -19,6 +19,7 @@
 - **OS**: Windows 10/11専用
 - **Node.js**: v18以上
 - **シェル**: PowerShell（node-ptyで起動）
+- **WSL対応**: WSL環境でもセッション間通信が利用可能
 
 ## アーキテクチャ
 
@@ -65,9 +66,12 @@
    - `types.ts`: TypeScript型定義
 
 3. **CLI層** (`bin/`)
-   - `wterm-send.js`: 特定セッションへメッセージ送信
-   - `wterm-broadcast.js`: 全セッションへブロードキャスト
-   - `wterm-list.js`: セッション一覧表示
+   - `wterm-send.js`, `wterm-send.cmd`: 特定セッションへメッセージ送信（PowerShell用）
+   - `wterm-send`: 特定セッションへメッセージ送信（WSL用Bashスクリプト）
+   - `wterm-broadcast.js`, `wterm-broadcast.cmd`: 全セッションへブロードキャスト（PowerShell用）
+   - `wterm-broadcast`: 全セッションへブロードキャスト（WSL用Bashスクリプト）
+   - `wterm-list.js`, `wterm-list.cmd`: セッション一覧表示（PowerShell用）
+   - `wterm-list`: セッション一覧表示（WSL用Bashスクリプト）
 
 ## 技術スタック
 
@@ -100,6 +104,13 @@
 - **推奨ランタイム**: Node.js（tsxで実行）
 - **実験的サポート**: Bun（Windows環境ではnode-ptyの入力エコー問題あり）
 
+### ネットワーク設定
+
+- **バインドアドレス**: `0.0.0.0` (全インターフェース)
+  - localhost（127.0.0.1）からのアクセス: ✓
+  - LAN内の他のデバイスからのアクセス: ✓
+  - WSL2からのアクセス: ✓
+
 ## 主要コンポーネント詳細
 
 ### 1. セッション管理 (`src/sessions.ts`)
@@ -126,6 +137,9 @@ createSession(command?: string)
 - `WTERM_API_URL`: APIエンドポイント（例: `http://localhost:3000`）
 - `WTERM_SESSION_ID`: セッション識別子（例: `session-1`）
 - `PATH`: binディレクトリを追加（CLIコマンドを利用可能にする）
+- `WSLENV`: WSL環境への環境変数引き継ぎ設定（`WTERM_API_URL:WTERM_SESSION_ID`）
+  - PowerShellからWSLに入る際に、wtermの環境変数を自動的に引き継ぐ
+  - WSL環境でもセッション間通信コマンドが利用可能になる
 
 **PTY初期化タイミング**
 - PTYからの最初のデータ出力で初期化完了と判断
@@ -327,12 +341,15 @@ wterm/
 │   ├── app.js          # クライアントアプリ
 │   └── style.css       # スタイルシート
 ├── bin/
-│   ├── wterm-send.js        # セッション間送信コマンド
+│   ├── wterm-send.js        # セッション間送信コマンド（Node.js）
 │   ├── wterm-send.cmd       # Windows用ラッパー
-│   ├── wterm-broadcast.js   # ブロードキャストコマンド
+│   ├── wterm-send           # WSL用Bashスクリプト
+│   ├── wterm-broadcast.js   # ブロードキャストコマンド（Node.js）
 │   ├── wterm-broadcast.cmd  # Windows用ラッパー
-│   ├── wterm-list.js        # セッション一覧コマンド
-│   └── wterm-list.cmd       # Windows用ラッパー
+│   ├── wterm-broadcast      # WSL用Bashスクリプト
+│   ├── wterm-list.js        # セッション一覧コマンド（Node.js）
+│   ├── wterm-list.cmd       # Windows用ラッパー
+│   └── wterm-list           # WSL用Bashスクリプト
 ├── config.json         # 設定ファイル
 ├── package.json
 ├── tsconfig.json
@@ -371,6 +388,78 @@ npm run start:bun
 
 3. **環境変数の確認**
    - セッション内で`$env:WTERM_API_URL`などを確認
+
+### WSL環境でのセットアップ
+
+wtermはWSL（Windows Subsystem for Linux）環境でも動作し、セッション間通信が可能です。
+
+#### 初回セットアップ
+
+1. **スクリプトの改行コード修正と実行権限の付与**
+   ```bash
+   # WSL内で実行（改行コードをLFに変換して実行権限を付与）
+   cd /mnt/c/Users/black/Documents/Develop/wterm/bin
+   sed -i 's/\r$//' wterm-send wterm-broadcast wterm-list
+   chmod +x wterm-send wterm-broadcast wterm-list
+   ```
+
+   Windows環境で作成されたスクリプトはCRLF改行になっているため、WSLで実行する前にLF改行に変換する必要があります。
+
+2. **curlのインストール確認**
+   ```bash
+   # curlがインストールされているか確認
+   which curl
+
+   # インストールされていない場合
+   sudo apt update && sudo apt install curl
+   ```
+
+3. **動作確認**
+   ```bash
+   # PowerShellからWSLに入る
+   wsl
+
+   # 環境変数が引き継がれているか確認
+   echo $WTERM_API_URL
+   echo $WTERM_SESSION_ID
+
+   # セッション一覧を取得
+   wterm-list
+
+   # 別のセッションにメッセージ送信（セッションIDは適宜変更）
+   wterm-send session-2 "Hello from WSL"
+   ```
+
+#### WSLENVの仕組み
+
+- PowerShellで設定された`WSLENV`環境変数により、`WTERM_API_URL`と`WTERM_SESSION_ID`がWSL環境に自動的に引き継がれる
+- これにより、PowerShellからWSLに入った際も、同じセッションIDでセッション間通信が可能
+- WSL用のBashスクリプト（`wterm-send`など）は、これらの環境変数を使用してHTTP APIにリクエストを送信
+
+#### WSL2のlocalhost問題への対応
+
+WSL2では`localhost`がWSL側のlocalhostを指すため、Windows側のサーバーに直接接続できません。wtermでは以下の対応を実施しています：
+
+**サーバー側の対応:**
+- HTTPサーバーを`0.0.0.0`にバインド（全ネットワークインターフェースで待ち受け）
+- WSL2からWindowsホストのIPアドレス経由でアクセス可能
+
+**クライアント側の対応（Bashスクリプト）:**
+- `WTERM_API_URL`に`localhost`が含まれている場合、WindowsホストのIPアドレスを自動取得
+  - 優先: `ip route show default`コマンドでデフォルトゲートウェイ（WindowsホストのIP）を取得
+  - フォールバック: `/etc/resolv.conf`から取得
+- `localhost`をWindowsホストのIPアドレスに置き換えてAPIリクエストを送信
+- ユーザーは特別な設定なしでWSL2環境でもセッション間通信が利用可能
+
+#### オプション: PATHの永続化
+
+毎回絶対パスを指定せずにコマンドを実行したい場合、`.bashrc`にPATHを追加：
+
+```bash
+# WSL内で実行
+echo 'export PATH="$PATH:/mnt/c/Users/black/Documents/Develop/wterm/bin"' >> ~/.bashrc
+source ~/.bashrc
+```
 
 ## よくある開発タスク
 
@@ -432,6 +521,62 @@ UIから追加するか、`config.json`を直接編集：
 
 - Windows環境ではnode-ptyとBunの互換性問題
 - Node.js（tsx）での実行を推奨
+
+### WSL環境でコマンドが動作しない
+
+1. **HTTP 000エラー（接続失敗）が発生する場合**
+
+   WSL2環境では自動的にWindowsホストのIPアドレスに変換されますが、稀に失敗する場合があります：
+
+   ```bash
+   # WindowsホストのIPアドレスを確認（推奨方法）
+   ip route show default | awk '{print $3}'
+
+   # 環境変数を確認
+   echo $WTERM_API_URL
+
+   # 手動でテスト（IPアドレスは上記コマンドで取得したものに置き換え）
+   WINDOWS_HOST=$(ip route show default | awk '{print $3}')
+   curl http://${WINDOWS_HOST}:3000/api/sessions
+   ```
+
+   接続できない場合は、以下を確認してください：
+   - Windowsファイアウォールの設定（管理者権限で`.\setup-firewall.ps1`を実行）
+   - サーバーが`0.0.0.0:3000`にバインドされているか（`netstat -an | findstr ":3000"`）
+
+2. **環境変数が引き継がれていない場合**
+   ```bash
+   # WSL内で環境変数を確認
+   echo $WTERM_API_URL
+   echo $WTERM_SESSION_ID
+   ```
+   - 空の場合、PowerShellで`$env:WSLENV`が正しく設定されているか確認
+   - WSLを再起動してみる
+
+3. **スクリプトに実行権限がない場合、または改行コードの問題**
+   ```bash
+   # WSL内で改行コードを修正して実行権限を付与
+   cd /mnt/c/Users/black/Documents/Develop/wterm/bin
+   sed -i 's/\r$//' wterm-send wterm-broadcast wterm-list
+   chmod +x wterm-send wterm-broadcast wterm-list
+   ```
+
+   エラーメッセージ「cannot execute: required file not found」が表示される場合は、改行コードがCRLFになっている可能性が高いです。上記の`sed`コマンドで修正できます。
+
+4. **PATHが通っていない場合**
+   ```bash
+   # 絶対パスで実行
+   /mnt/c/Users/black/Documents/Develop/wterm/bin/wterm-send session-2 テスト
+
+   # または、.bashrcにPATHを追加
+   export PATH="$PATH:/mnt/c/Users/black/Documents/Develop/wterm/bin"
+   ```
+
+5. **curlが利用できない場合**
+   ```bash
+   # WSL内でcurlをインストール
+   sudo apt update && sudo apt install curl
+   ```
 
 ## セキュリティ考慮事項
 

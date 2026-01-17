@@ -51,6 +51,8 @@ export function createSession(command: string = ''): Session {
     WTERM_API_URL: `http://localhost:${config.port}`,
     WTERM_SESSION_ID: sessionId,
     PATH: `${process.env.PATH};${getBinPath()}`,
+    // WSLに環境変数を引き継ぐための設定
+    WSLENV: 'WTERM_API_URL:WTERM_SESSION_ID',
   };
 
   const binPath = getBinPath();
@@ -61,7 +63,7 @@ export function createSession(command: string = ''): Session {
     '-NoProfile',
     '-NoExit',
     '-Command',
-    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'`
+    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'; $env:WSLENV = 'WTERM_API_URL:WTERM_SESSION_ID'`
   ], {
     name: 'xterm-256color',
     cols: 120,
@@ -243,6 +245,8 @@ export function restartSession(sessionId: string): boolean {
     WTERM_API_URL: `http://localhost:${config.port}`,
     WTERM_SESSION_ID: sessionId,
     PATH: `${process.env.PATH};${getBinPath()}`,
+    // WSLに環境変数を引き継ぐための設定
+    WSLENV: 'WTERM_API_URL:WTERM_SESSION_ID',
   };
 
   const binPath = getBinPath();
@@ -253,7 +257,7 @@ export function restartSession(sessionId: string): boolean {
     '-NoProfile',
     '-NoExit',
     '-Command',
-    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'`
+    `$env:PATH += ';${binPath}'; $env:WTERM_API_URL = '${env.WTERM_API_URL}'; $env:WTERM_SESSION_ID = '${sessionId}'; $env:WSLENV = 'WTERM_API_URL:WTERM_SESSION_ID'`
   ], {
     name: 'xterm-256color',
     cols: 120,

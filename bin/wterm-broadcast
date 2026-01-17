@@ -1,0 +1,68 @@
+#!/bin/bash
+# wterm-broadcast - 全セッションへメッセージ送信コマンド（WSL版）
+
+WTERM_API_URL="${WTERM_API_URL}"
+WTERM_SESSION_ID="${WTERM_SESSION_ID}"
+
+if [ -z "$WTERM_API_URL" ]; then
+  echo "エラー: WTERM_API_URL 環境変数が設定されていません" >&2
+  echo "このコマンドはwterm内のセッションから実行してください" >&2
+  exit 1
+fi
+
+if [ -z "$WTERM_SESSION_ID" ]; then
+  echo "エラー: WTERM_SESSION_ID 環境変数が設定されていません" >&2
+  echo "このコマンドはwterm内のセッションから実行してください" >&2
+  exit 1
+fi
+
+if [ $# -lt 1 ]; then
+  echo "使用法: wterm-broadcast <message>" >&2
+  echo "" >&2
+  echo "例: wterm-broadcast こんにちは" >&2
+  exit 1
+fi
+
+MESSAGE="$*"
+
+# WSL2対応: localhostをWindowsホストのIPアドレスに置き換え
+if [[ "$WTERM_API_URL" == *"localhost"* ]]; then
+  # ip routeコマンドでWindowsホストのIPアドレスを取得（推奨）
+  if command -v ip &> /dev/null; then
+    WINDOWS_HOST=$(ip route show default | awk '{print $3}' | head -1)
+  fi
+  # フォールバック: /etc/resolv.confから取得
+  if [ -z "$WINDOWS_HOST" ] && [ -f /etc/resolv.conf ]; then
+    WINDOWS_HOST=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}' | head -1)
+  fi
+  if [ -n "$WINDOWS_HOST" ]; then
+    WTERM_API_URL="${WTERM_API_URL/localhost/$WINDOWS_HOST}"
+  fi
+fi
+
+# APIリクエストを送信
+RESPONSE=$(curl -s -w "\n%{http_code}" \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d "{\"from\":\"$WTERM_SESSION_ID\",\"to\":\"all\",\"message\":\"$MESSAGE\"}" \
+  "$WTERM_API_URL/api/send")
+
+# HTTPステータスコードを取得
+HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+BODY=$(echo "$RESPONSE" | head -n-1)
+
+if [ "$HTTP_CODE" != "200" ]; then
+  echo "エラー: HTTPリクエスト失敗 (HTTP $HTTP_CODE)" >&2
+  exit 1
+fi
+
+# JSONレスポンスを解析
+SUCCESS=$(echo "$BODY" | grep -o '"success":[^,}]*' | cut -d':' -f2 | tr -d ' ')
+
+if [ "$SUCCESS" != "true" ]; then
+  ERROR_MSG=$(echo "$BODY" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+  echo "エラー: ${ERROR_MSG:-送信に失敗しました}" >&2
+  exit 1
+fi
+
+echo "✓ メッセージを全セッションに送信しました"

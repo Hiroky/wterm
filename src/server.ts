@@ -436,8 +436,10 @@ wss.on('connection', (ws: WebSocket) => {
 });
 
 // サーバー起動
-httpServer.listen(config.port, () => {
+httpServer.listen(config.port, '0.0.0.0', () => {
   console.log(`wterm サーバーが起動しました: http://localhost:${config.port}`);
+  console.log(`  ローカル: http://localhost:${config.port}`);
+  console.log(`  ネットワーク: http://0.0.0.0:${config.port} (WSL2からもアクセス可能)`);
 
   // ブラウザを自動で開く（Windows）
   if (process.platform === 'win32') {
