@@ -32,7 +32,8 @@ try {
     body: JSON.stringify({
       from: fromSessionId,
       to: targetSessionId,
-      message: message
+      message: message,
+      waitForResponse: true
     })
   });
 
@@ -46,7 +47,66 @@ try {
     process.exit(1);
   }
 
-  console.log(`メッセージを ${targetSessionId} に送信しました`);
+  // レスポンス出力を整形して表示
+  if (result.output) {
+    // ANSIエスケープシーケンスを除去
+    // eslint-disable-next-line no-control-regex
+    const cleanOutput = result.output
+      // カーソル位置移動シーケンス (ESC[row;colH) を改行に変換
+      .replace(/\x1b\[[0-9]+;[0-9]+H/g, '\n')
+      // カラーコードを除去
+      .replace(/\x1b\[[^m]*m/g, '')
+      // その他の制御シーケンスを除去
+      .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '')
+      // OSC シーケンスを除去
+      .replace(/\x1b\][^\x07]*\x07/g, '')
+      // その他のエスケープシーケンス
+      .replace(/\x1b[=>]/g, '');
+
+    // \r\n を \n に統一し、\r のみの場合も \n に変換
+    const normalizedOutput = cleanOutput.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+
+    // 行ごとに分割
+    const lines = normalizedOutput.split('\n');
+
+    // 送信したコマンド行とプロンプト行を除去
+    const outputLines = [];
+    let foundCommand = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+
+      // 空行はスキップ（ただし出力の途中の空行は保持）
+      if (!trimmedLine && outputLines.length === 0) {
+        continue;
+      }
+
+      // 送信したコマンドを含む行をスキップ
+      if (!foundCommand && line.includes(message)) {
+        foundCommand = true;
+        continue;
+      }
+
+      // プロンプト行をスキップ
+      if (/^PS\s+[A-Z]?:?.*>\s*$/.test(trimmedLine)) {
+        continue;
+      }
+
+      // それ以外は出力に追加
+      outputLines.push(line);
+    }
+
+    // 末尾の空行を削除
+    while (outputLines.length > 0 && !outputLines[outputLines.length - 1].trim()) {
+      outputLines.pop();
+    }
+
+    // 出力を表示（改行なしで終わる）
+    if (outputLines.length > 0) {
+      process.stdout.write(outputLines.join('\n') + '\n');
+    }
+  }
 } catch (err) {
   console.error(`送信失敗: ${err.message}`);
   process.exit(1);

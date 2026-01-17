@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Skill(corelib-implementation)",
-      "Skill(code-review-agent)",
-      "Bash(powershell -File:*)"
-    ]
-  }
-}

@@ -285,7 +285,7 @@ async function handleSendMessage(req: any, res: any, corsHeaders: { [key: string
   try {
     const body = await readBody(req);
     const parsed = JSON.parse(body);
-    const { from, to, message } = parsed;
+    const { from, to, message, waitForResponse } = parsed;
 
     if (!from || !to || !message) {
       res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
@@ -293,11 +293,11 @@ async function handleSendMessage(req: any, res: any, corsHeaders: { [key: string
       return;
     }
 
-    const result = sendMessage(from, to, message);
+    const result = await sendMessage(from, to, message, { waitForResponse });
 
     if (result.success) {
       res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, messageId: result.messageId }));
+      res.end(JSON.stringify({ success: true, messageId: result.messageId, output: result.output }));
     } else {
       res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
       res.end(

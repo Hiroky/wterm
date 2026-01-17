@@ -18,7 +18,6 @@ class WtermApp {
     // DOM要素
     this.elements = {
       sessionList: document.getElementById('session-list'),
-      tabs: document.getElementById('tabs'),
       terminalContainer: document.getElementById('terminal-container'),
       welcomeMessage: document.getElementById('welcome-message'),
       historyList: document.getElementById('history-list'),
@@ -166,7 +165,7 @@ class WtermApp {
       case 'sessions':
         this.sessions = message.sessions;
         this.renderSessionList();
-        this.renderTabs();
+        this.updateTerminalHeader();
         this.updateStatusBar();
 
         // 作成待ちのセッションがあれば選択
@@ -310,10 +309,13 @@ class WtermApp {
       // フィット
       const termData = this.terminals.get(sessionId);
       if (termData) {
-        setTimeout(() => {
-          termData.fitAddon.fit();
-          termData.terminal.focus();
-        }, 0);
+        // DOMの再描画を待ってからfitを実行
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            termData.fitAddon.fit();
+            termData.terminal.focus();
+          });
+        });
       }
     }
 
@@ -322,16 +324,53 @@ class WtermApp {
 
     // UI更新
     this.renderSessionList();
-    this.renderTabs();
+    this.updateTerminalHeader();
     this.updateStatusBar();
   }
 
   createTerminal(sessionId) {
+    const session = this.sessions.find((s) => s.id === sessionId);
+
     // ターミナルラッパー作成
     const wrapper = document.createElement('div');
     wrapper.id = `terminal-${sessionId}`;
     wrapper.className = 'terminal-wrapper';
+
+    // ヘッダー作成
+    const header = document.createElement('div');
+    header.className = 'terminal-header';
+    header.innerHTML = `
+      <div class="terminal-header-left">
+        <span class="terminal-header-session">${sessionId}</span>
+        <span class="terminal-header-status ${session?.status || 'running'}">
+          ${session?.status === 'running' ? '実行中' : '終了'}
+        </span>
+        <span class="terminal-header-command">${session?.command || 'PowerShell'}</span>
+      </div>
+      <div class="terminal-header-right">
+        <button class="btn-icon btn-terminal-restart" title="再起動" style="display: ${session?.status === 'exited' ? 'inline-flex' : 'none'};">
+          <span>↻</span>
+        </button>
+        <button class="btn-icon btn-terminal-close" title="セッション削除">
+          <span>✕</span>
+        </button>
+      </div>
+    `;
+
+    // ターミナルコンテンツ
+    const content = document.createElement('div');
+    content.className = 'terminal-content';
+
+    wrapper.appendChild(header);
+    wrapper.appendChild(content);
     this.elements.terminalContainer.appendChild(wrapper);
+
+    // ヘッダーボタンのイベントリスナー
+    const restartBtn = header.querySelector('.btn-terminal-restart');
+    const closeBtn = header.querySelector('.btn-terminal-close');
+
+    restartBtn.addEventListener('click', () => this.restartSession(sessionId));
+    closeBtn.addEventListener('click', () => this.deleteSession(sessionId));
 
     // xterm.js初期化
     const terminal = new Terminal({
@@ -351,8 +390,8 @@ class WtermApp {
 
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
-    terminal.open(wrapper);
-    fitAddon.fit();
+    terminal.open(content);
+    // fitAddon.fit()は表示されるまで遅延（selectSession内で実行）
 
     // 入力をWebSocketへ送信
     terminal.onData((data) => {
@@ -406,7 +445,7 @@ class WtermApp {
       session.exitCode = exitCode;
     }
     this.renderSessionList();
-    this.renderTabs();
+    this.updateTerminalHeader();
   }
 
   // ================== UI レンダリング ==================
@@ -455,36 +494,34 @@ class WtermApp {
     });
   }
 
-  renderTabs() {
-    const tabs = this.elements.tabs;
-    tabs.innerHTML = '';
+  updateTerminalHeader(sessionId = null) {
+    // 特定のセッションまたは全セッションのヘッダーを更新
+    const sessionsToUpdate = sessionId ? [sessionId] : this.sessions.map(s => s.id);
 
-    this.sessions.forEach((session) => {
-      const tab = document.createElement('div');
-      tab.className = `tab${session.id === this.activeSessionId ? ' active' : ''}`;
-      tab.innerHTML = `
-        <span class="tab-name">${session.id}</span>
-        <span class="tab-close" data-session="${session.id}">✕</span>
-      `;
+    sessionsToUpdate.forEach(sid => {
+      const wrapper = document.getElementById(`terminal-${sid}`);
+      if (!wrapper) return;
 
-      tab.addEventListener('click', (e) => {
-        if (!e.target.classList.contains('tab-close')) {
-          this.selectSession(session.id);
-        }
-      });
+      const session = this.sessions.find((s) => s.id === sid);
+      if (!session) return;
 
-      tab.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        this.showContextMenu(e, session.id);
-      });
+      const header = wrapper.querySelector('.terminal-header');
+      if (!header) return;
 
-      const closeBtn = tab.querySelector('.tab-close');
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.deleteSession(session.id);
-      });
+      const sessionSpan = header.querySelector('.terminal-header-session');
+      const statusSpan = header.querySelector('.terminal-header-status');
+      const commandSpan = header.querySelector('.terminal-header-command');
+      const restartBtn = header.querySelector('.btn-terminal-restart');
 
-      tabs.appendChild(tab);
+      if (sessionSpan) sessionSpan.textContent = session.id;
+      if (statusSpan) {
+        statusSpan.textContent = session.status === 'running' ? '実行中' : '終了';
+        statusSpan.className = `terminal-header-status ${session.status}`;
+      }
+      if (commandSpan) commandSpan.textContent = session.command || 'PowerShell';
+      if (restartBtn) {
+        restartBtn.style.display = session.status === 'exited' ? 'inline-flex' : 'none';
+      }
     });
   }
 
@@ -644,10 +681,9 @@ class WtermApp {
         this.createTerminal(session.id);
         wrapper = document.getElementById(`terminal-${session.id}`);
       }
-      
+
       if (wrapper) {
         wrapper.classList.add('active');
-        wrapper.style.position = 'relative';
         pane.appendChild(wrapper);
       }
       
@@ -665,10 +701,7 @@ class WtermApp {
       // WebSocketでattach
       this.sendMessage({ type: 'attach', sessionId: session.id });
     });
-    
-    // タブバーを更新
-    this.renderTabs();
-    
+
     // 全ターミナルをリサイズ
     setTimeout(() => {
       this.fitAllTerminals();
@@ -691,7 +724,6 @@ class WtermApp {
         const wrapper = pane.querySelector('.terminal-wrapper');
         if (wrapper) {
           wrapper.classList.remove('active');
-          wrapper.style.position = 'absolute';
           container.appendChild(wrapper);
         }
       });
@@ -775,22 +807,21 @@ class WtermApp {
     const pane = document.createElement('div');
     pane.className = 'split-pane';
     pane.dataset.sessionId = sessionId;
-    
+
     let wrapper = document.getElementById(`terminal-${sessionId}`);
     if (!wrapper) {
       this.createTerminal(sessionId);
       wrapper = document.getElementById(`terminal-${sessionId}`);
     }
-    
+
     if (wrapper) {
       wrapper.classList.add('active');
-      wrapper.style.position = 'relative';
       pane.appendChild(wrapper);
     }
-    
+
     splitContainer.appendChild(pane);
     this.splitPanes.set(sessionId, pane);
-    
+
     this.sendMessage({ type: 'attach', sessionId });
   }
 

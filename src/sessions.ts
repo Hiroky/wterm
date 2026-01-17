@@ -378,14 +378,14 @@ function safeWrite(session: Session, data: string): boolean {
 /**
  * 内部コマンドを処理
  */
-function handleInternalCommand(sessionId: string, command: string): boolean {
+async function handleInternalCommand(sessionId: string, command: string): Promise<boolean> {
   // /send コマンド
   const sendMatch = command.match(/^\/send\s+(\S+)\s+(.+)$/);
   if (sendMatch) {
     const targetId = sendMatch[1];
     const message = sendMatch[2];
-    const result = sendMessage(sessionId, targetId, message);
-    
+    const result = await sendMessage(sessionId, targetId, message);
+
     // 結果をセッションに出力
     const session = sessions.get(sessionId);
     if (session && session.status === 'running') {
@@ -405,8 +405,8 @@ function handleInternalCommand(sessionId: string, command: string): boolean {
   const broadcastMatch = command.match(/^\/broadcast\s+(.+)$/);
   if (broadcastMatch) {
     const message = broadcastMatch[1];
-    const result = sendMessage(sessionId, 'all', message);
-    
+    const result = await sendMessage(sessionId, 'all', message);
+
     const session = sessions.get(sessionId);
     if (session && session.status === 'running') {
       if (result.success) {
@@ -533,10 +533,84 @@ export function getSessionBuffer(sessionId: string): string {
 }
 
 /**
+ * プロンプトパターンを検出
+ */
+function detectPrompt(text: string): boolean {
+  // PowerShellプロンプトパターン
+  // PS > または PS C:\... > など
+  // ANSIエスケープシーケンスを除去してから検出
+  const cleanText = text.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '');
+
+  // 最後の行を取得（プロンプトは最後の行にある）
+  const lines = cleanText.split(/\r?\n/);
+  const lastLine = lines[lines.length - 1] || '';
+
+  // プロンプトパターンにマッチするかチェック
+  // PS C:\...> の形式
+  return /PS\s+[A-Z]?:?[^>]*>\s*/.test(lastLine);
+}
+
+/**
+ * セッションの出力を監視してプロンプトまで待機
+ */
+function waitForPrompt(sessionId: string, startCollecting: () => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const session = sessions.get(sessionId);
+    if (!session || session.status !== 'running') {
+      reject(new Error(`セッション '${sessionId}' が見つかりません`));
+      return;
+    }
+
+    let output = '';
+    let dataHandler: ((data: string) => void) | null = null;
+    let collecting = false;
+
+    const cleanup = () => {
+      if (dataHandler && session.pty && session.pty.onData) {
+        // ハンドラを削除（node-ptyの制限により完全には削除できないが、nullチェックで対応）
+        dataHandler = null;
+      }
+    };
+
+    // 出力を監視
+    dataHandler = (data: string) => {
+      if (!dataHandler) return; // cleanup後は処理しない
+
+      // 収集開始フラグが立ってから出力を収集
+      if (collecting) {
+        output += data;
+
+        // プロンプトを検出
+        if (detectPrompt(output)) {
+          cleanup();
+          resolve(output);
+        }
+      }
+    };
+
+    // PTY出力ハンドラを追加
+    session.pty.onData(dataHandler);
+
+    // メッセージ送信のタイミングを制御するコールバックを実行
+    // ハンドラ設定後に収集を開始
+    setTimeout(() => {
+      collecting = true;
+      startCollecting();
+    }, 10); // 短い遅延でハンドラが確実に登録されるようにする
+  });
+}
+
+/**
  * メッセージを送信（セッション間通信）
  */
-export function sendMessage(from: string, to: string, content: string): { success: boolean; messageId?: string; error?: string; availableSessions?: string[] } {
+export async function sendMessage(
+  from: string,
+  to: string,
+  content: string,
+  options: { waitForResponse?: boolean } = {}
+): Promise<{ success: boolean; messageId?: string; error?: string; availableSessions?: string[]; output?: string }> {
   const config = getConfig();
+  const { waitForResponse = false } = options;
 
   // 送信先の検証
   if (to !== 'all') {
@@ -572,35 +646,65 @@ export function sendMessage(from: string, to: string, content: string): { succes
     messageHistory.shift();
   }
 
-  // 送信先にメッセージを転送
-  if (to === 'all') {
-    // ブロードキャスト
-    sessions.forEach((session, sessionId) => {
-      if (sessionId !== from && session.status === 'running') {
-        safeWrite(session, `${content}\r`);
-      }
-    });
-  } else {
-    // 特定セッションへ送信
-    const targetSession = sessions.get(to);
-    if (targetSession && targetSession.status === 'running') {
-      safeWrite(targetSession, `${content}\r`);
+  // レスポンス待機
+  let output: string | undefined;
+  if (waitForResponse && to !== 'all') {
+    try {
+      output = await waitForPrompt(
+        to,
+        () => {
+          // メッセージを送信するコールバック
+          const targetSession = sessions.get(to);
+          if (targetSession && targetSession.status === 'running') {
+            safeWrite(targetSession, `${content}\r`);
+          }
+
+          // WebSocketでメッセージ通知
+          if (broadcastFn) {
+            broadcastFn({
+              type: 'message',
+              message,
+            });
+          }
+
+          console.log(`メッセージ送信: ${from} → ${to}: ${content.substring(0, 50)}...`);
+        }
+      );
+    } catch (err) {
+      console.error(`レスポンス待機エラー:`, err);
     }
-  }
+  } else {
+    // レスポンス待機なしの場合は通常通り送信
+    if (to === 'all') {
+      // ブロードキャスト
+      sessions.forEach((session, sessionId) => {
+        if (sessionId !== from && session.status === 'running') {
+          safeWrite(session, `${content}\r`);
+        }
+      });
+    } else {
+      // 特定セッションへ送信
+      const targetSession = sessions.get(to);
+      if (targetSession && targetSession.status === 'running') {
+        safeWrite(targetSession, `${content}\r`);
+      }
+    }
 
-  // WebSocketでメッセージ通知
-  if (broadcastFn) {
-    broadcastFn({
-      type: 'message',
-      message,
-    });
-  }
+    // WebSocketでメッセージ通知
+    if (broadcastFn) {
+      broadcastFn({
+        type: 'message',
+        message,
+      });
+    }
 
-  console.log(`メッセージ送信: ${from} → ${to}: ${content.substring(0, 50)}...`);
+    console.log(`メッセージ送信: ${from} → ${to}: ${content.substring(0, 50)}...`);
+  }
 
   return {
     success: true,
     messageId: message.id,
+    output,
   };
 }
 

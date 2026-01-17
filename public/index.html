@@ -50,32 +50,30 @@
         <ul id="session-list" class="session-list"></ul>
       </aside>
 
-      <!-- ターミナルエリア -->
-      <div class="terminal-area">
-        <!-- タブバー -->
-        <div id="tab-bar" class="tab-bar">
-          <div id="tabs" class="tabs"></div>
-        </div>
-
-        <!-- ターミナルコンテナ -->
-        <div id="terminal-container" class="terminal-container">
-          <div id="welcome-message" class="welcome-message">
-            <p>新しいセッションを作成してください</p>
-            <p>ショートカットから素早くセッションを開始できます</p>
+      <!-- ターミナルと履歴の縦並びコンテナ -->
+      <div class="content-area">
+        <!-- ターミナルエリア -->
+        <div class="terminal-area">
+          <!-- ターミナルコンテナ -->
+          <div id="terminal-container" class="terminal-container">
+            <div id="welcome-message" class="welcome-message">
+              <p>新しいセッションを作成してください</p>
+              <p>ショートカットから素早くセッションを開始できます</p>
+            </div>
           </div>
         </div>
-      </div>
 
-      <!-- 履歴パネル -->
-      <aside id="history-panel" class="history-panel">
-        <div class="panel-header">
-          <span>📨 受信履歴</span>
-          <button id="btn-toggle-history" class="btn-icon" title="履歴パネルを閉じる">
-            ▼
-          </button>
-        </div>
-        <div id="history-list" class="history-list"></div>
-      </aside>
+        <!-- 履歴パネル -->
+        <aside id="history-panel" class="history-panel">
+          <div class="panel-header">
+            <span>📨 受信履歴</span>
+            <button id="btn-toggle-history" class="btn-icon" title="履歴パネルを閉じる">
+              ▼
+            </button>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </aside>
+      </div>
     </div>
 
     <!-- ステータスバー -->

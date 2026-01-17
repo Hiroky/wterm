@@ -88,6 +88,7 @@ export interface SendMessageRequest {
   from: string;
   to: string;
   message: string;
+  waitForResponse?: boolean;  // レスポンス待機フラグ
 }
 
 export interface SendMessageResponse {
@@ -95,6 +96,7 @@ export interface SendMessageResponse {
   messageId?: string;
   message?: string;
   availableSessions?: string[];
+  output?: string;  // レスポンス待機時の出力
 }
 
 export interface SessionListResponse {
