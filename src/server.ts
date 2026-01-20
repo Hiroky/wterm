@@ -11,6 +11,7 @@ import {
   writeToSession,
   resizeSession,
   getSessionBuffer,
+  getSessionBufferRange,
   sendMessage,
   getMessageHistory,
   getAvailableSessionIds,
@@ -221,6 +222,31 @@ async function handleApiRequest(req: any, res: any, path: string, corsHeaders: {
         success ? { success: true } : { success: false, message: 'セッションが見つからないか、まだ実行中です' }
       )
     );
+    return;
+  }
+
+  // セッションバッファ取得
+  const bufferMatch = path.match(/^\/api\/sessions\/([^/]+)\/buffer$/);
+  if (bufferMatch && req.method === 'GET') {
+    const sessionId = bufferMatch[1];
+    const url = new URL(req.url || '/', `http://${req.headers.host}`);
+    const fromPositionParam = url.searchParams.get('fromPosition');
+    const fromPosition = fromPositionParam ? parseInt(fromPositionParam, 10) : 0;
+
+    const result = getSessionBufferRange(sessionId, fromPosition);
+
+    if (result === null) {
+      res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'セッションが見つかりません' }));
+      return;
+    }
+
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      sessionId,
+      content: result.content,
+      currentPosition: result.currentPosition
+    }));
     return;
   }
 

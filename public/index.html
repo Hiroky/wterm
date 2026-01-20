@@ -76,12 +76,46 @@
       </div>
     </div>
 
+    <!-- チャット入力欄 -->
+    <div id="chat-pane" class="chat-pane">
+      <div class="chat-toolbar">
+        <div class="chat-toolbar-left">
+          <div class="buffer-buttons" id="buffer-buttons">
+            <!-- 動的生成: 1-9 のボタン -->
+          </div>
+        </div>
+        <div class="chat-toolbar-right">
+          <button id="btn-send-current" class="chat-btn chat-btn-send" aria-label="現在のセッションに送信" title="Ctrl+Enter">
+            <span class="chat-btn-icon">↑</span>
+            <span class="chat-btn-label">送信</span>
+          </button>
+          <button id="btn-send-all" class="chat-btn chat-btn-broadcast" aria-label="全セッションに送信" title="全セッションにブロードキャスト">
+            <span class="chat-btn-icon">⇈</span>
+            <span class="chat-btn-label">全送信</span>
+          </button>
+          <button id="btn-clear-chat" class="chat-btn chat-btn-clear" aria-label="テキストをクリア">
+            <span class="chat-btn-icon">×</span>
+          </button>
+        </div>
+      </div>
+      <textarea
+        id="chat-textarea"
+        class="chat-textarea"
+        placeholder="メッセージを入力... (Ctrl+1-9: セッションに送信 | Ctrl+Enter: 現在のセッションに送信)"
+        aria-label="メッセージ入力欄"
+        spellcheck="false"
+      ></textarea>
+    </div>
+
     <!-- ステータスバー -->
     <footer class="status-bar">
       <span id="status-sessions">セッション: 0</span>
       <span id="status-active">アクティブ: なし</span>
     </footer>
   </div>
+
+  <!-- トースト通知 -->
+  <div id="toast-container" class="toast-container"></div>
 
   <!-- 設定ダイアログ -->
   <dialog id="settings-dialog" class="dialog">
@@ -106,6 +140,27 @@
             <option value="left">左</option>
             <option value="right">右</option>
           </select>
+        </label>
+      </section>
+
+      <section class="settings-section">
+        <h3>ターミナル設定</h3>
+        <label>
+          フォントファミリー:
+          <input
+            type="text"
+            id="setting-font-family"
+            placeholder="例: 'Cascadia Code', Consolas, monospace"
+            spellcheck="false"
+          >
+          <small style="display: block; color: var(--text-muted); margin-top: 4px;">
+            CSS形式で指定してください。複数のフォントをカンマ区切りで指定できます。
+          </small>
+        </label>
+        <label>
+          フォントサイズ:
+          <input type="number" id="setting-font-size" min="8" max="32" step="1">
+          <span style="color: var(--text-muted); font-size: 0.9em;">px (8-32)</span>
         </label>
       </section>
 
@@ -165,6 +220,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.min.js"></script>
+  <script src="chat-pane.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

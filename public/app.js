@@ -55,6 +55,11 @@ class WtermApp {
 
     // UIを初期化
     this.applyUILayout();
+
+    // チャット入力欄を初期化
+    if (window.chatPane) {
+      window.chatPane.init(this);
+    }
   }
 
   // ================== 設定管理 ==================
@@ -97,6 +102,34 @@ class WtermApp {
 
     // 履歴パネル
     this.elements.historyPanel.classList.toggle('hidden', !showHistoryPanel);
+  }
+
+  applyTerminalSettings() {
+    if (!this.config?.terminal) return;
+
+    const { fontFamily, fontSize } = this.config.terminal;
+    const fontFamilyWithFallback = `'${fontFamily}', 'Consolas', monospace`;
+
+    // すべてのアクティブなターミナルインスタンスに設定を適用
+    this.terminals.forEach(({ terminal }, sessionId) => {
+      try {
+        terminal.options.fontFamily = fontFamilyWithFallback;
+        terminal.options.fontSize = fontSize;
+        // フォント変更後はリフレッシュとリサイズが必要
+        terminal.refresh(0, terminal.rows - 1);
+        if (this.activeSessionId === sessionId) {
+          // アクティブなターミナルはfitも実行
+          const terminalData = this.terminals.get(sessionId);
+          if (terminalData?.fitAddon) {
+            setTimeout(() => terminalData.fitAddon.fit(), 50);
+          }
+        }
+      } catch (e) {
+        console.error(`セッション ${sessionId} のフォント設定適用に失敗:`, e);
+      }
+    });
+
+    console.log(`ターミナル設定を適用: ${fontFamily}, ${fontSize}px`);
   }
 
   // ================== WebSocket ==================
@@ -167,6 +200,11 @@ class WtermApp {
         this.renderSessionList();
         this.updateTerminalHeader();
         this.updateStatusBar();
+
+        // チャット入力欄のバッファボタンを更新
+        if (window.chatPane) {
+          window.chatPane.updateSessionCount(this.sessions);
+        }
 
         // 作成待ちのセッションがあれば選択
         if (this.pendingSessionId) {
@@ -373,10 +411,14 @@ class WtermApp {
     closeBtn.addEventListener('click', () => this.deleteSession(sessionId));
 
     // xterm.js初期化
+    // 設定からフォント設定を取得（フォールバック付き）
+    const fontFamily = this.config?.terminal?.fontFamily || 'Cascadia Code';
+    const fontSize = this.config?.terminal?.fontSize || 14;
+
     const terminal = new Terminal({
       cursorBlink: true,
-      fontSize: 14,
-      fontFamily: "'Cascadia Code', 'Consolas', monospace",
+      fontSize: fontSize,
+      fontFamily: `'${fontFamily}', 'Consolas', monospace`,
       theme: {
         background: '#1e1e1e',
         foreground: '#cccccc',
@@ -895,11 +937,15 @@ class WtermApp {
 
   openSettingsDialog() {
     const dialog = this.dialogs.settings;
-    
+
     // 現在の設定を反映
     document.getElementById('setting-sidebar').checked = this.config.uiLayout.showSidebar;
     document.getElementById('setting-history').checked = this.config.uiLayout.showHistoryPanel;
     document.getElementById('setting-sidebar-position').value = this.config.uiLayout.sidebarPosition;
+
+    // ターミナル設定を反映
+    document.getElementById('setting-font-family').value = this.config.terminal?.fontFamily || 'Cascadia Code';
+    document.getElementById('setting-font-size').value = this.config.terminal?.fontSize || 14;
 
     // ショートカット一覧を表示
     this.renderShortcutList();
@@ -912,11 +958,45 @@ class WtermApp {
   }
 
   saveSettings() {
+    // UIレイアウト設定
     this.config.uiLayout.showSidebar = document.getElementById('setting-sidebar').checked;
     this.config.uiLayout.showHistoryPanel = document.getElementById('setting-history').checked;
     this.config.uiLayout.sidebarPosition = document.getElementById('setting-sidebar-position').value;
 
+    // ターミナル設定
+    const fontFamily = document.getElementById('setting-font-family').value.trim();
+    const fontSize = parseInt(document.getElementById('setting-font-size').value, 10);
+
+    // バリデーション
+    if (!fontFamily) {
+      alert('フォントファミリーを入力してください');
+      return;
+    }
+    if (fontSize < 8 || fontSize > 32 || isNaN(fontSize)) {
+      alert('フォントサイズは8〜32の範囲で指定してください');
+      return;
+    }
+
+    // 設定が変更されたかチェック
+    const fontChanged =
+      this.config.terminal?.fontFamily !== fontFamily ||
+      this.config.terminal?.fontSize !== fontSize;
+
+    // ターミナル設定を更新
+    if (!this.config.terminal) {
+      this.config.terminal = {};
+    }
+    this.config.terminal.fontFamily = fontFamily;
+    this.config.terminal.fontSize = fontSize;
+
+    // サーバーに保存
     this.saveConfig(this.config);
+
+    // フォント設定が変更されていたら、すべてのターミナルに適用
+    if (fontChanged) {
+      this.applyTerminalSettings();
+    }
+
     this.closeSettingsDialog();
   }
 

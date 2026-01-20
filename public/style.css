@@ -759,3 +759,372 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
 }
+
+/* ============================================
+   チャット入力欄 - Tactical Terminal Aesthetic
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  /* Tactical Terminal カラーパレット */
+  --chat-bg-surface: #151922;
+  --chat-bg-toolbar: #0a0e14;
+  --chat-border: #2d3139;
+  --chat-border-glow: rgba(255, 180, 84, 0.2);
+  --chat-text: #e6e8ea;
+  --chat-text-muted: #6c7380;
+  --chat-accent-amber: #ffb454;
+  --chat-accent-amber-glow: rgba(255, 180, 84, 0.4);
+  --chat-accent-cyan: #59c2ff;
+  --chat-warning: #ff6b6b;
+
+  /* トランジション */
+  --chat-transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --chat-transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* チャット入力欄コンテナ */
+.chat-pane {
+  position: fixed;
+  bottom: var(--status-bar-height);
+  left: 0;
+  right: 0;
+  background: var(--chat-bg-surface);
+  border-top: 2px solid var(--chat-border);
+  font-family: 'JetBrains Mono', 'Consolas', 'Monaco', monospace;
+  z-index: 100;
+  animation: chatPaneSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes chatPaneSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ツールバー */
+.chat-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--chat-bg-toolbar);
+  border-bottom: 1px solid var(--chat-border);
+  gap: 12px;
+  min-height: 44px;
+}
+
+.chat-toolbar-left,
+.chat-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* バッファ取得ボタンコンテナ */
+.buffer-buttons {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(45, 49, 57, 0.5);
+  border-radius: 6px;
+  border: 1px solid var(--chat-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.buffer-buttons::-webkit-scrollbar {
+  height: 4px;
+}
+
+.buffer-buttons::-webkit-scrollbar-thumb {
+  background: var(--chat-accent-amber);
+  border-radius: 2px;
+}
+
+/* バッファ取得ボタン */
+.buffer-btn {
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--chat-border);
+  border-radius: 4px;
+  color: var(--chat-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--chat-transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.buffer-btn::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  background: radial-gradient(circle, var(--chat-accent-amber-glow) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: width var(--chat-transition-base), height var(--chat-transition-base);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.buffer-btn:hover::before {
+  width: 60px;
+  height: 60px;
+  opacity: 1;
+}
+
+.buffer-btn:hover {
+  border-color: var(--chat-accent-amber);
+  color: var(--chat-accent-amber);
+  box-shadow: 0 0 12px var(--chat-border-glow);
+  transform: translateY(-1px);
+}
+
+.buffer-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 0 8px var(--chat-border-glow);
+}
+
+.buffer-btn-disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* チャットアクションボタン */
+.chat-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--chat-bg-surface);
+  border: 1px solid var(--chat-border);
+  border-radius: 6px;
+  color: var(--chat-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--chat-transition-fast);
+  position: relative;
+  overflow: hidden;
+  letter-spacing: 0.3px;
+}
+
+.chat-btn-icon {
+  font-size: 16px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chat-btn-label {
+  line-height: 1;
+}
+
+/* ボタンの種類ごとのスタイル */
+.chat-btn-send {
+  border-color: var(--chat-accent-amber);
+  background: linear-gradient(135deg, rgba(255, 180, 84, 0.1) 0%, transparent 100%);
+}
+
+.chat-btn-send:hover {
+  border-color: var(--chat-accent-amber);
+  background: linear-gradient(135deg, rgba(255, 180, 84, 0.2) 0%, rgba(255, 180, 84, 0.05) 100%);
+  box-shadow: 0 0 16px var(--chat-accent-amber-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: var(--chat-accent-amber);
+}
+
+.chat-btn-broadcast {
+  border-color: var(--chat-accent-cyan);
+  background: linear-gradient(135deg, rgba(89, 194, 255, 0.1) 0%, transparent 100%);
+}
+
+.chat-btn-broadcast:hover {
+  border-color: var(--chat-accent-cyan);
+  background: linear-gradient(135deg, rgba(89, 194, 255, 0.2) 0%, rgba(89, 194, 255, 0.05) 100%);
+  box-shadow: 0 0 16px rgba(89, 194, 255, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  color: var(--chat-accent-cyan);
+}
+
+.chat-btn-clear {
+  padding: 8px 10px;
+  border-color: var(--chat-border);
+}
+
+.chat-btn-clear:hover {
+  border-color: var(--chat-warning);
+  color: var(--chat-warning);
+  box-shadow: 0 0 12px rgba(255, 107, 107, 0.3);
+}
+
+.chat-btn:active {
+  transform: scale(0.98);
+}
+
+/* テキストエリア */
+.chat-textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 30vh;
+  padding: 14px 16px;
+  background: var(--chat-bg-surface);
+  border: none;
+  border-top: 1px solid var(--chat-border);
+  color: var(--chat-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  resize: none;
+  overflow-y: auto;
+  transition: background var(--chat-transition-base);
+  outline: none;
+}
+
+.chat-textarea::placeholder {
+  color: var(--chat-text-muted);
+  opacity: 0.6;
+}
+
+.chat-textarea:focus {
+  background: rgba(21, 25, 34, 0.8);
+  box-shadow: inset 0 1px 0 var(--chat-border-glow);
+}
+
+/* トースト通知 */
+.toast-container {
+  position: fixed;
+  bottom: calc(var(--status-bar-height) + 200px);
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  pointer-events: none;
+}
+
+.toast {
+  padding: 12px 20px;
+  background: var(--chat-bg-toolbar);
+  border: 1px solid var(--chat-border);
+  border-radius: 8px;
+  color: var(--chat-text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4), 0 0 0 1px var(--chat-border-glow);
+  max-width: 400px;
+  pointer-events: all;
+  backdrop-filter: blur(8px);
+}
+
+.toast-info {
+  border-left: 3px solid var(--chat-accent-cyan);
+}
+
+.toast-warning {
+  border-left: 3px solid var(--chat-warning);
+}
+
+.toast-error {
+  border-left: 3px solid var(--chat-warning);
+  box-shadow: 0 4px 16px rgba(255, 107, 107, 0.3), 0 0 0 1px rgba(255, 107, 107, 0.2);
+}
+
+/* アニメーション */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes slideOutDown {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+}
+
+/* レスポンシブ対応 */
+@media (max-width: 768px) {
+  .chat-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .chat-toolbar-left {
+    flex: 1;
+    min-width: 100%;
+  }
+
+  .buffer-buttons {
+    flex: 1;
+    max-width: 100%;
+  }
+
+  .chat-btn-label {
+    display: none;
+  }
+
+  .chat-btn {
+    padding: 8px;
+  }
+}
+
+/* レイアウト調整: ターミナルエリアの高さをチャット入力欄分確保 */
+.main-container {
+  height: calc(100vh - var(--header-height) - var(--status-bar-height));
+  /* チャット入力欄の高さは動的に調整されるため、JavaScriptで制御 */
+}
+
+/* フォーカス状態の強調 */
+.chat-textarea:focus-visible {
+  outline: 2px solid var(--chat-accent-amber);
+  outline-offset: -2px;
+}
+
+.buffer-btn:focus-visible,
+.chat-btn:focus-visible {
+  outline: 2px solid var(--chat-accent-amber);
+  outline-offset: 2px;
+}
+
+/* スクロールバーのカスタマイズ（チャット専用） */
+.chat-textarea::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-textarea::-webkit-scrollbar-track {
+  background: var(--chat-bg-toolbar);
+}
+
+.chat-textarea::-webkit-scrollbar-thumb {
+  background: var(--chat-border);
+  border-radius: 4px;
+}
+
+.chat-textarea::-webkit-scrollbar-thumb:hover {
+  background: var(--chat-accent-amber);
+}

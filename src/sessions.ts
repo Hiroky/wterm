@@ -564,6 +564,22 @@ export function getSessionBuffer(sessionId: string): string {
 }
 
 /**
+ * セッションの出力バッファを指定位置から取得（差分取得）
+ */
+export function getSessionBufferRange(sessionId: string, fromPosition: number = 0): { content: string; currentPosition: number } | null {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  const fullBuffer = session.outputBuffer.join('');
+  const content = fullBuffer.substring(fromPosition);
+  const currentPosition = fullBuffer.length;
+
+  return { content, currentPosition };
+}
+
+/**
  * プロンプトパターンを検出
  */
 function detectPrompt(text: string): boolean {

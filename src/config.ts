@@ -23,6 +23,10 @@ const DEFAULT_CONFIG: Config = {
     sidebarPosition: 'left',
     defaultView: 'tab',
   },
+  terminal: {
+    fontFamily: 'Cascadia Code',
+    fontSize: 14,
+  },
 };
 
 let currentConfig: Config = { ...DEFAULT_CONFIG };
@@ -49,6 +53,10 @@ export function loadConfig(): Config {
       uiLayout: {
         ...DEFAULT_CONFIG.uiLayout,
         ...parsed.uiLayout,
+      },
+      terminal: {
+        ...DEFAULT_CONFIG.terminal,
+        ...parsed.terminal,
       },
     };
 

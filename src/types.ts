@@ -41,6 +41,12 @@ export interface UILayout {
   defaultView: 'tab' | 'split';
 }
 
+// ターミナル表示設定
+export interface TerminalSettings {
+  fontFamily: string;
+  fontSize: number;
+}
+
 // 設定ファイル構造
 export interface Config {
   port: number;
@@ -48,6 +54,7 @@ export interface Config {
   bufferSize: number;
   shortcuts: Shortcut[];
   uiLayout: UILayout;
+  terminal: TerminalSettings;
 }
 
 // WebSocketメッセージ型（クライアント→サーバー）
