@@ -442,8 +442,8 @@ httpServer.listen(config.port, '0.0.0.0', () => {
   console.log(`  ローカル: http://localhost:${config.port}`);
   console.log(`  ネットワーク: http://0.0.0.0:${config.port} (WSL2からもアクセス可能)`);
 
-  // ブラウザを自動で開く（Windows）
-  if (process.platform === 'win32') {
+  // ブラウザを自動で開く（Windows、開発モード以外）
+  if (process.platform === 'win32' && process.env.NODE_ENV !== 'development') {
     exec(`start http://localhost:${config.port}`);
   }
 });

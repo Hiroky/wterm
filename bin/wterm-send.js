@@ -3,8 +3,21 @@
 
 const apiUrl = process.env.WTERM_API_URL;
 const fromSessionId = process.env.WTERM_SESSION_ID;
-const targetSessionId = process.argv[2];
-const message = process.argv.slice(3).join(' ');
+
+// コマンドライン引数の解析
+let waitForResponse = true;
+let targetSessionId = null;
+let messageStartIndex = 2;
+
+if (process.argv[2] === '--no-wait' || process.argv[2] === '-n') {
+  waitForResponse = false;
+  targetSessionId = process.argv[3];
+  messageStartIndex = 4;
+} else {
+  targetSessionId = process.argv[2];
+}
+
+const message = process.argv.slice(messageStartIndex).join(' ');
 
 if (!apiUrl) {
   console.error('エラー: WTERM_API_URL 環境変数が設定されていません');
@@ -19,9 +32,14 @@ if (!fromSessionId) {
 }
 
 if (!targetSessionId || !message) {
-  console.error('使用法: wterm-send <session-id> <message>');
+  console.error('使用法: wterm-send [--no-wait|-n] <session-id> <message>');
   console.error('');
-  console.error('例: wterm-send session-2 こんにちは');
+  console.error('オプション:');
+  console.error('  --no-wait, -n    レスポンスを待たずに終了（投げっぱなしモード）');
+  console.error('');
+  console.error('例:');
+  console.error('  wterm-send session-2 こんにちは');
+  console.error('  wterm-send --no-wait session-2 ビルド開始');
   process.exit(1);
 }
 
@@ -33,7 +51,7 @@ try {
       from: fromSessionId,
       to: targetSessionId,
       message: message,
-      waitForResponse: true
+      waitForResponse: waitForResponse
     })
   });
 
@@ -45,6 +63,12 @@ try {
       console.error(`利用可能なセッション: ${result.availableSessions.join(', ')}`);
     }
     process.exit(1);
+  }
+
+  // 投げっぱなしモードの場合はここで終了
+  if (!waitForResponse) {
+    console.log('メッセージを送信しました');
+    process.exit(0);
   }
 
   // レスポンス出力を整形して表示

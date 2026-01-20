@@ -16,10 +16,29 @@ if [ -z "$WTERM_SESSION_ID" ]; then
   exit 1
 fi
 
+# オプション解析
+WAIT_FOR_RESPONSE=true
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --no-wait|-n)
+      WAIT_FOR_RESPONSE=false
+      shift
+      ;;
+    *)
+      break
+      ;;
+  esac
+done
+
 if [ $# -lt 2 ]; then
-  echo "使用法: wterm-send <session-id> <message>" >&2
+  echo "使用法: wterm-send [--no-wait|-n] <session-id> <message>" >&2
   echo "" >&2
-  echo "例: wterm-send session-2 こんにちは" >&2
+  echo "オプション:" >&2
+  echo "  --no-wait, -n    レスポンスを待たずに終了（投げっぱなしモード）" >&2
+  echo "" >&2
+  echo "例:" >&2
+  echo "  wterm-send session-2 こんにちは" >&2
+  echo "  wterm-send --no-wait session-2 ビルド開始" >&2
   exit 1
 fi
 
@@ -46,7 +65,7 @@ fi
 RESPONSE=$(curl -s -w "\n%{http_code}" \
   -X POST \
   -H "Content-Type: application/json" \
-  -d "{\"from\":\"$WTERM_SESSION_ID\",\"to\":\"$TARGET_SESSION_ID\",\"message\":\"$MESSAGE\",\"waitForResponse\":true}" \
+  -d "{\"from\":\"$WTERM_SESSION_ID\",\"to\":\"$TARGET_SESSION_ID\",\"message\":\"$MESSAGE\",\"waitForResponse\":$WAIT_FOR_RESPONSE}" \
   "$WTERM_API_URL/api/send")
 
 # HTTPステータスコードを取得
@@ -71,6 +90,12 @@ if [ "$SUCCESS" != "true" ]; then
     echo "利用可能なセッション: $AVAILABLE" >&2
   fi
   exit 1
+fi
+
+# 投げっぱなしモードの場合はここで終了
+if [ "$WAIT_FOR_RESPONSE" = "false" ]; then
+  echo "メッセージを送信しました"
+  exit 0
 fi
 
 # レスポンス出力を整形して表示

@@ -6,9 +6,9 @@
   "main": "src/server.ts",
   "scripts": {
     "start": "tsx src/server.ts",
-    "dev": "tsx watch src/server.ts",
+    "dev": "cross-env NODE_ENV=development tsx watch src/server.ts",
     "start:bun": "bun run src/server.ts",
-    "dev:bun": "bun --watch run src/server.ts"
+    "dev:bun": "cross-env NODE_ENV=development bun --watch run src/server.ts"
   },
   "dependencies": {
     "node-pty": "^1.0.0",
@@ -17,6 +17,7 @@
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/ws": "^8.5.10",
+    "cross-env": "^10.1.0",
     "tsx": "^4.7.0",
     "typescript": "^5.0.0"
   }

@@ -381,6 +381,17 @@ function safeWrite(session: Session, data: string): boolean {
 }
 
 /**
+ * 入力バッファを使わずにセッションへ直接送信
+ */
+function writeToSessionRaw(sessionId: string, data: string): boolean {
+  const session = sessions.get(sessionId);
+  if (!session || session.status !== 'running') {
+    return false;
+  }
+  return safeWrite(session, data);
+}
+
+/**
  * 内部コマンドを処理
  */
 async function handleInternalCommand(sessionId: string, command: string): Promise<boolean> {
@@ -566,8 +577,26 @@ function detectPrompt(text: string): boolean {
   const lastLine = lines[lines.length - 1] || '';
 
   // プロンプトパターンにマッチするかチェック
-  // PS C:\...> の形式
-  return /PS\s+[A-Z]?:?[^>]*>\s*/.test(lastLine);
+  // 1. PowerShell: PS C:\...>
+  if (/PS\s+[A-Z]?:?[^>]*>\s*/.test(lastLine)) {
+    console.log('[detectPrompt] Matched PowerShell prompt');
+    return true;
+  }
+
+  // 2. Claude Code CLI: > で始まる（> だけ、または > (...) 形式）
+  if (/^>\s*/.test(lastLine.trim())) {
+    console.log('[detectPrompt] Matched Claude Code CLI prompt');
+    return true;
+  }
+
+  // 3. WSL/Bash系: user@host:~$ または # で終わるプロンプト
+  if (/^.*[\$#]\s*$/.test(lastLine.trim())) {
+    console.log('[detectPrompt] Matched Bash prompt');
+    return true;
+  }
+
+  console.log('[detectPrompt] No match');
+  return false;
 }
 
 /**
@@ -672,12 +701,12 @@ export async function sendMessage(
     try {
       output = await waitForPrompt(
         to,
-        () => {
-          // メッセージを送信するコールバック
-          const targetSession = sessions.get(to);
-          if (targetSession && targetSession.status === 'running') {
-            safeWrite(targetSession, `${content}\r`);
-          }
+        async () => {
+          // メッセージを送信するコールバック（入力バッファを介さずに送信）
+          writeToSessionRaw(to, content);
+          // Enterキーの前に少し待つ（Claude Code CLIが入力を認識するため）
+          await new Promise(resolve => setTimeout(resolve, 100));
+          writeToSessionRaw(to, '\r');
 
           // WebSocketでメッセージ通知
           if (broadcastFn) {
@@ -697,17 +726,22 @@ export async function sendMessage(
     // レスポンス待機なしの場合は通常通り送信
     if (to === 'all') {
       // ブロードキャスト
-      sessions.forEach((session, sessionId) => {
+      for (const [sessionId, session] of sessions.entries()) {
         if (sessionId !== from && session.status === 'running') {
-          safeWrite(session, `${content}\r`);
+          // 入力バッファを介さずに送信
+          writeToSessionRaw(sessionId, content);
+          // Enterキーの前に少し待つ
+          await new Promise(resolve => setTimeout(resolve, 100));
+          writeToSessionRaw(sessionId, '\r');
         }
-      });
+      }
     } else {
       // 特定セッションへ送信
-      const targetSession = sessions.get(to);
-      if (targetSession && targetSession.status === 'running') {
-        safeWrite(targetSession, `${content}\r`);
-      }
+      // 入力バッファを介さずに送信
+      writeToSessionRaw(to, content);
+      // Enterキーの前に少し待つ
+      await new Promise(resolve => setTimeout(resolve, 100));
+      writeToSessionRaw(to, '\r');
     }
 
     // WebSocketでメッセージ通知
