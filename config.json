@@ -27,5 +27,9 @@
     "showHistoryPanel": true,
     "sidebarPosition": "left",
     "defaultView": "tab"
+  },
+  "terminal": {
+    "fontFamily": "Kosugi Maru",
+    "fontSize": 16
   }
 }
