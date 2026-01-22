@@ -16,6 +16,11 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
 
   const workspaceSessions = sessions.filter((s) => workspace.sessions.includes(s.id));
 
+  function handleToggleExpand(e: React.MouseEvent) {
+    e.stopPropagation();
+    setIsExpanded(!isExpanded);
+  }
+
   async function handleSetActive() {
     if (!isActive) {
       setActiveWorkspace(workspace.id);
@@ -29,7 +34,6 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
         console.error('Failed to set active workspace:', error);
       }
     }
-    setIsExpanded(!isExpanded);
   }
 
   async function handleDelete(e: React.MouseEvent) {
@@ -92,6 +96,25 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
     setIsEditing(true);
   }
 
+  async function handleSessionClick(sessionId: string) {
+    // アクティブセッションを設定
+    setActiveSession(sessionId);
+
+    // このワークスペースがアクティブでない場合、アクティブ化
+    if (!isActive) {
+      setActiveWorkspace(workspace.id);
+      try {
+        await fetch('/api/workspaces/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId: workspace.id }),
+        });
+      } catch (error) {
+        console.error('Failed to set active workspace:', error);
+      }
+    }
+  }
+
   async function handleDeleteSession(sessionId: string, e: React.MouseEvent) {
     e.stopPropagation();
 
@@ -131,7 +154,12 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
         }`}
       >
         <div className="flex flex-1 items-center gap-2">
-          <span className="text-lg">{isExpanded ? '▼' : '▶'}</span>
+          <span
+            onClick={handleToggleExpand}
+            className="cursor-pointer text-lg hover:text-blue-400"
+          >
+            {isExpanded ? '▼' : '▶'}
+          </span>
           <span className="text-lg">{workspace.icon}</span>
           {isEditing ? (
             <input
@@ -177,7 +205,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
           {workspaceSessions.map((session) => (
             <div
               key={session.id}
-              onClick={() => setActiveSession(session.id)}
+              onClick={() => handleSessionClick(session.id)}
               className={`group flex cursor-pointer items-center justify-between rounded p-2 transition-colors ${
                 activeSessionId === session.id
                   ? 'bg-blue-500'

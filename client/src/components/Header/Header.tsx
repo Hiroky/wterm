@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import useStore from '../../store';
+import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
+import type { LayoutNode } from '../../types';
 import ShortcutsMenu from './ShortcutsMenu';
 
 export default function Header() {
-  const { isConnected, activeWorkspaceId, workspaces, updateWorkspace, setActiveSession } = useStore();
+  const { isConnected, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession } = useStore();
   const [isCreating, setIsCreating] = useState(false);
 
   async function createNewSession() {
@@ -33,15 +35,29 @@ export default function Header() {
         if (workspace) {
           const updatedSessions = [...workspace.sessions, data.sessionId];
 
+          // レイアウトを更新
+          let newLayout: LayoutNode;
+
+          if (!workspace.layout) {
+            // レイアウトが空の場合、新しいターミナルノードを作成
+            newLayout = { type: 'terminal', sessionId: data.sessionId };
+          } else {
+            // 既存のレイアウトがある場合、右側に分割
+            const existingSessionIds = getAllSessionIds(workspace.layout);
+            const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
+            newLayout = insertSessionIntoTree(workspace.layout, lastSessionId, data.sessionId, 'right');
+          }
+
           // バックエンドに更新
           await fetch(`/api/workspaces/${activeWorkspaceId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessions: updatedSessions }),
+            body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
           });
 
           // ローカル状態も更新
           updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
+          updateLayout(activeWorkspaceId, newLayout);
         }
       }
     } catch (error) {

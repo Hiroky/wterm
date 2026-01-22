@@ -1,8 +1,10 @@
 import { useState, useRef, useEffect } from 'react';
 import useStore from '../../store';
+import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
+import type { LayoutNode } from '../../types';
 
 export default function ShortcutsMenu() {
-  const { config, activeWorkspaceId, workspaces, updateWorkspace, setActiveSession } = useStore();
+  const { config, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -43,15 +45,29 @@ export default function ShortcutsMenu() {
         if (workspace) {
           const updatedSessions = [...workspace.sessions, data.sessionId];
 
+          // レイアウトを更新
+          let newLayout: LayoutNode;
+
+          if (!workspace.layout) {
+            // レイアウトが空の場合、新しいターミナルノードを作成
+            newLayout = { type: 'terminal', sessionId: data.sessionId };
+          } else {
+            // 既存のレイアウトがある場合、右側に分割
+            const existingSessionIds = getAllSessionIds(workspace.layout);
+            const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
+            newLayout = insertSessionIntoTree(workspace.layout, lastSessionId, data.sessionId, 'right');
+          }
+
           // バックエンドに更新
           await fetch(`/api/workspaces/${activeWorkspaceId}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessions: updatedSessions }),
+            body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
           });
 
           // ローカル状態も更新
           updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
+          updateLayout(activeWorkspaceId, newLayout);
         }
       }
 
