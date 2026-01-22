@@ -54,7 +54,6 @@ export default function Terminal({ sessionId }: Props) {
       cursorBlink: true,
       fontSize: config?.terminal?.fontSize || 14,
       fontFamily: config?.terminal?.fontFamily || 'Cascadia Code, Consolas, monospace',
-      bellStyle: 'none',
       theme: {
         background: '#1e1e1e',
         foreground: '#cccccc',

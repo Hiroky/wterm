@@ -108,12 +108,21 @@ setBroadcastFunction(broadcast);
 /**
  * 静的ファイルを読み込む
  */
+function getStaticRoot(): string {
+  const distClientDir = resolve(process.cwd(), 'dist', 'client');
+  const distIndex = resolve(distClientDir, 'index.html');
+  if (existsSync(distIndex)) {
+    return distClientDir;
+  }
+  return resolve(process.cwd(), 'public');
+}
+
 function serveStaticFile(path: string): { statusCode: number; headers: Record<string, string>; content: Buffer | string } {
-  const publicDir = resolve(process.cwd(), 'public');
-  const filePath = resolve(publicDir, path);
+  const staticRoot = getStaticRoot();
+  const filePath = resolve(staticRoot, path);
 
   // パストラバーサル防止
-  if (!filePath.startsWith(publicDir)) {
+  if (!filePath.startsWith(staticRoot)) {
     return {
       statusCode: 403,
       headers: { 'Content-Type': 'text/plain' },
@@ -140,6 +149,8 @@ function serveStaticFile(path: string): { statusCode: number; headers: Record<st
     png: 'image/png',
     ico: 'image/x-icon',
     svg: 'image/svg+xml',
+    map: 'application/json; charset=utf-8',
+    txt: 'text/plain; charset=utf-8',
   };
 
   return {
@@ -193,7 +204,16 @@ async function handleRequest(req: any, res: any): Promise<void> {
 
   // 静的ファイル
   const filePath = path === '/' || path === '/index.html' ? 'index.html' : path.slice(1);
-  const fileResponse = serveStaticFile(filePath);
+  let fileResponse = serveStaticFile(filePath);
+
+  // SPA fallback: return index.html for non-file routes
+  if (fileResponse.statusCode === 404) {
+    const isFileRequest = path.includes('.') || path.startsWith('/assets/');
+    if (!isFileRequest) {
+      fileResponse = serveStaticFile('index.html');
+    }
+  }
+
   res.writeHead(fileResponse.statusCode, fileResponse.headers);
   res.end(fileResponse.content);
 }

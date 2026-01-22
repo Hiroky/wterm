@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import useStore from '../../store';
-import type { TerminalSettings, UILayout, Workspace } from '../../types';
+import type { TerminalSettings, UILayout } from '../../types';
 
 interface SettingsDialogProps {
   isOpen: boolean;
