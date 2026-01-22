@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import useStore from '../../store';
-import type { TerminalSettings, UILayout } from '../../types';
+import type { TerminalSettings, UILayout, Workspace } from '../../types';
 
 interface SettingsDialogProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-type TabType = 'terminal' | 'ui' | 'shortcuts';
+type TabType = 'terminal' | 'ui' | 'workspaces' | 'shortcuts';
 
 export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps) {
   const config = useStore((state) => state.config);
   const updateConfig = useStore((state) => state.updateConfig);
+  const workspaces = useStore((state) => state.workspaces);
+  const updateWorkspace = useStore((state) => state.updateWorkspace);
 
   const [activeTab, setActiveTab] = useState<TabType>('terminal');
   const [isSaving, setIsSaving] = useState(false);
@@ -30,6 +32,9 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
     defaultView: 'split',
   });
 
+  // ワークスペース設定（cwdの編集用）
+  const [workspaceSettings, setWorkspaceSettings] = useState<Record<string, string>>({});
+
   // configが変更されたら設定を更新
   useEffect(() => {
     if (config) {
@@ -37,6 +42,15 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
       setUiLayout(config.uiLayout);
     }
   }, [config]);
+
+  // ワークスペースが変更されたら設定を更新
+  useEffect(() => {
+    const cwdMap: Record<string, string> = {};
+    workspaces.forEach((ws) => {
+      cwdMap[ws.id] = ws.cwd || '';
+    });
+    setWorkspaceSettings(cwdMap);
+  }, [workspaces]);
 
   const saveSettings = useCallback(async () => {
     setIsSaving(true);
@@ -56,6 +70,19 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
         throw new Error('Failed to save settings');
       }
 
+      // ワークスペースの cwd を更新
+      for (const ws of workspaces) {
+        const newCwd = workspaceSettings[ws.id];
+        if (newCwd !== undefined && newCwd !== ws.cwd) {
+          await fetch(`/api/workspaces/${ws.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cwd: newCwd }),
+          });
+          updateWorkspace(ws.id, { cwd: newCwd });
+        }
+      }
+
       // ローカル状態を更新
       updateConfig(updatedConfig);
       onClose();
@@ -64,13 +91,14 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
     } finally {
       setIsSaving(false);
     }
-  }, [terminalSettings, uiLayout, updateConfig, onClose]);
+  }, [terminalSettings, uiLayout, workspaces, workspaceSettings, updateConfig, updateWorkspace, onClose]);
 
   if (!isOpen) return null;
 
   const tabs: { id: TabType; label: string }[] = [
     { id: 'terminal', label: 'Terminal' },
     { id: 'ui', label: 'UI Layout' },
+    { id: 'workspaces', label: 'Workspaces' },
     { id: 'shortcuts', label: 'Shortcuts' },
   ];
 
@@ -277,6 +305,49 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                   </label>
                 </div>
               </div>
+            </div>
+          )}
+
+          {activeTab === 'workspaces' && (
+            <div className="space-y-4">
+              <p className="text-sm text-gray-400">
+                Configure the initial working directory for each workspace.
+                New sessions will start in this directory.
+              </p>
+              {workspaces.length > 0 ? (
+                <div className="space-y-3">
+                  {workspaces.map((ws) => (
+                    <div
+                      key={ws.id}
+                      className="rounded border border-gray-600 bg-gray-700 p-3"
+                    >
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="text-lg">{ws.icon}</span>
+                        <span className="font-medium">{ws.name}</span>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-gray-400">
+                          Working Directory
+                        </label>
+                        <input
+                          type="text"
+                          value={workspaceSettings[ws.id] || ''}
+                          onChange={(e) =>
+                            setWorkspaceSettings({
+                              ...workspaceSettings,
+                              [ws.id]: e.target.value,
+                            })
+                          }
+                          placeholder="C:\Users\..."
+                          className="w-full rounded border border-gray-600 bg-gray-800 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-gray-500">No workspaces configured.</p>
+              )}
             </div>
           )}
 

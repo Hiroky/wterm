@@ -161,7 +161,7 @@ async function handleRequest(req: any, res: any): Promise<void> {
   // CORS ヘッダー
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
@@ -185,7 +185,7 @@ async function handleRequest(req: any, res: any): Promise<void> {
       res.end(JSON.stringify(getConfig()));
       return;
     }
-    if (req.method === 'POST') {
+    if (req.method === 'POST' || req.method === 'PATCH') {
       await handleConfigUpdate(req, res, corsHeaders);
       return;
     }
@@ -423,6 +423,7 @@ async function handleCreateWorkspace(req: any, res: any, corsHeaders: { [key: st
       icon: parsed.icon || '📁',
       sessions: [],
       layout: null,
+      cwd: parsed.cwd || process.cwd(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -465,6 +466,7 @@ async function handleUpdateWorkspace(
     if (updates.icon !== undefined) workspace.icon = updates.icon;
     if (updates.layout !== undefined) workspace.layout = updates.layout;
     if (updates.sessions !== undefined) workspace.sessions = updates.sessions;
+    if (updates.cwd !== undefined) workspace.cwd = updates.cwd;
     workspace.updatedAt = new Date().toISOString();
 
     saveConfig(config);

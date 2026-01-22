@@ -64,6 +64,7 @@ export interface Workspace {
   icon: string;
   sessions: string[];
   layout: LayoutNode | null;
+  cwd?: string; // 初期カレントディレクトリ
   createdAt: string;
   updatedAt: string;
 }

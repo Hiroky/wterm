@@ -19,10 +19,15 @@ export default function Header() {
 
     setIsCreating(true);
     try {
+      // 現在のワークスペースの cwd を取得
+      const currentWorkspaces = useStore.getState().workspaces;
+      const currentWorkspace = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
+      const cwd = currentWorkspace?.cwd;
+
       const response = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ cwd }),
       });
 
       if (!response.ok) {
@@ -36,9 +41,8 @@ export default function Header() {
       // セッションをアクティブにする（WebSocketで実際のセッションが来るまで待たない）
       setActiveSession(sessionId);
 
-      // 現在のアクティブワークスペースを取得（最新の状態を取得）
-      const currentWorkspaces = useStore.getState().workspaces;
-      const workspace = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
+      // ワークスペースを再取得（セッション作成中に状態が変わっている可能性があるため）
+      const workspace = useStore.getState().workspaces.find((w) => w.id === activeWorkspaceId);
 
       if (workspace) {
         // 既にこのセッションがワークスペースに含まれていないか確認

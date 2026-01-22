@@ -9,7 +9,7 @@ interface WorkspaceItemProps {
 }
 
 export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProps) {
-  const [isExpanded, setIsExpanded] = useState(isActive);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(workspace.name);
 
@@ -67,13 +67,15 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   }
 
   async function handleSaveEdit() {
-    if (editName.trim() === '') {
+    const trimmedName = editName.trim();
+
+    if (trimmedName === '') {
       setEditName(workspace.name);
       setIsEditing(false);
       return;
     }
 
-    if (editName === workspace.name) {
+    if (trimmedName === workspace.name) {
       setIsEditing(false);
       return;
     }
@@ -82,18 +84,20 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
       const response = await fetch(`/api/workspaces/${workspace.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName }),
+        body: JSON.stringify({ name: trimmedName }),
       });
 
       if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('API error:', response.status, errorData);
         throw new Error('Failed to update workspace');
       }
 
-      updateWorkspace(workspace.id, { name: editName });
+      updateWorkspace(workspace.id, { name: trimmedName });
+      setEditName(trimmedName);
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating workspace:', error);
-      console.error('Failed to update workspace');
       setEditName(workspace.name);
       setIsEditing(false);
     }
@@ -166,6 +170,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
       {/* Workspace Header */}
       <div
         onClick={handleSetActive}
+        title={workspace.cwd ? `Working Directory: ${workspace.cwd}` : 'Working Directory: (default)'}
         className={`group flex cursor-pointer items-center justify-between rounded p-3 transition-colors ${
           isActive ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
         }`}
