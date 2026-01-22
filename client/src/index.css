@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+@theme {
+  --color-terminal-bg: #1e1e1e;
+  --color-terminal-fg: #cccccc;
+}
+
+:root {
+  font-family: 'Cascadia Code', 'Consolas', 'Courier New', monospace;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: #1e1e1e;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+* {
+  box-sizing: border-box;
+}

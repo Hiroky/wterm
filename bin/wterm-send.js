@@ -7,7 +7,7 @@ const fromSessionId = process.env.WTERM_SESSION_ID;
 // コマンドライン引数の解析
 let waitForResponse = true;
 let targetSessionId = null;
-let messageStartIndex = 2;
+let messageStartIndex = 3;
 
 if (process.argv[2] === '--no-wait' || process.argv[2] === '-n') {
   waitForResponse = false;
