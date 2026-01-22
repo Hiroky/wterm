@@ -4,9 +4,10 @@ import SplitPane from './SplitPane';
 
 interface LayoutRendererProps {
   layout: LayoutNode | null;
+  onLayoutChange?: (path: number[], newSizes: number[]) => void;
 }
 
-export default function LayoutRenderer({ layout }: LayoutRendererProps) {
+export default function LayoutRenderer({ layout, onLayoutChange }: LayoutRendererProps) {
   if (!layout) {
     return (
       <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
@@ -18,20 +19,42 @@ export default function LayoutRenderer({ layout }: LayoutRendererProps) {
     );
   }
 
-  return <LayoutNodeRenderer node={layout} />;
+  return <LayoutNodeRenderer node={layout} path={[]} onLayoutChange={onLayoutChange} />;
 }
 
-function LayoutNodeRenderer({ node }: { node: LayoutNode }) {
+interface LayoutNodeRendererProps {
+  node: LayoutNode;
+  path: number[];
+  onLayoutChange?: (path: number[], newSizes: number[]) => void;
+}
+
+function LayoutNodeRenderer({ node, path, onLayoutChange }: LayoutNodeRendererProps) {
   if (node.type === 'terminal') {
-    return <Terminal sessionId={node.sessionId} />;
+    return <Terminal key={node.sessionId} sessionId={node.sessionId} />;
   }
 
   if (node.type === 'split') {
     return (
-      <SplitPane direction={node.direction} sizes={node.sizes}>
-        {node.children.map((child, index) => (
-          <LayoutNodeRenderer key={index} node={child} />
-        ))}
+      <SplitPane
+        direction={node.direction}
+        sizes={node.sizes}
+        onSizesChange={(newSizes) => onLayoutChange?.(path, newSizes)}
+      >
+        {node.children.map((child, index) => {
+          // Generate a unique key based on the child type
+          const childKey = child.type === 'terminal'
+            ? child.sessionId
+            : `split-${path.join('-')}-${index}`;
+
+          return (
+            <LayoutNodeRenderer
+              key={childKey}
+              node={child}
+              path={[...path, index]}
+              onLayoutChange={onLayoutChange}
+            />
+          );
+        })}
       </SplitPane>
     );
   }

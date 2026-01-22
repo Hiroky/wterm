@@ -5,7 +5,7 @@ import type { LayoutNode } from '../../types';
 import ShortcutsMenu from './ShortcutsMenu';
 
 export default function Header() {
-  const { isConnected, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession } = useStore();
+  const { isConnected, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession, addSession } = useStore();
   const [isCreating, setIsCreating] = useState(false);
 
   async function createNewSession() {
@@ -25,6 +25,14 @@ export default function Header() {
 
       const data = await response.json();
       console.log('Session created:', data.sessionId);
+
+      // 楽観的更新: セッションリストに追加（WebSocketで更新されるまでのプレースホルダー）
+      addSession({
+        id: data.sessionId,
+        status: 'running',
+        createdAt: new Date().toISOString(),
+        command: '',
+      });
 
       // 新しいセッションをアクティブにする
       setActiveSession(data.sessionId);
@@ -62,7 +70,7 @@ export default function Header() {
       }
     } catch (error) {
       console.error('Error creating session:', error);
-      alert('Failed to create new session');
+      console.error('Failed to create new session');
     } finally {
       setIsCreating(false);
     }
@@ -95,7 +103,7 @@ export default function Header() {
         <ShortcutsMenu />
         <button
           className="rounded bg-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-600"
-          onClick={() => alert('Settings coming soon!')}
+          onClick={() => console.log('Settings coming soon!')}
         >
           Settings
         </button>

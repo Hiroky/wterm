@@ -35,7 +35,7 @@ export default function ChatPane() {
       setInputValue('');
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Failed to send message');
+      console.error('Failed to send message');
     } finally {
       setIsSending(false);
     }
@@ -48,12 +48,9 @@ export default function ChatPane() {
         throw new Error('Failed to get buffer');
       }
       const data = await response.json();
-      console.log('Buffer:', data);
-      // You can display this in a modal or separate panel
-      alert(`Buffer for ${sessionId}:\n${JSON.stringify(data, null, 2)}`);
+      console.log(`Buffer for ${sessionId}:`, data);
     } catch (error) {
       console.error('Error getting buffer:', error);
-      alert('Failed to get buffer');
     }
   }
 

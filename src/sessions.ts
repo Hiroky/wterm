@@ -10,9 +10,6 @@ const sessions = new Map<string, Session>();
 // メッセージ履歴
 const messageHistory: Message[] = [];
 
-// セッションIDカウンター
-let sessionCounter = 0;
-
 // WebSocket broadcast関数（サーバーから注入）
 let broadcastFn: ((message: any) => void) | null = null;
 
@@ -25,10 +22,30 @@ export function setBroadcastFunction(fn: (message: any) => void): void {
 
 /**
  * 新しいセッションIDを生成
+ * 既存セッションの最小の空き番号を使用
  */
 function generateSessionId(): string {
-  sessionCounter++;
-  return `session-${sessionCounter}`;
+  const existingIds = Array.from(sessions.keys());
+  const existingNumbers = existingIds
+    .map(id => {
+      const match = id.match(/^session-(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    })
+    .filter(n => n > 0);
+
+  // Find the smallest available number
+  let nextNumber = 1;
+  const sortedNumbers = existingNumbers.sort((a, b) => a - b);
+
+  for (const num of sortedNumbers) {
+    if (num === nextNumber) {
+      nextNumber++;
+    } else if (num > nextNumber) {
+      break;
+    }
+  }
+
+  return `session-${nextNumber}`;
 }
 
 /**

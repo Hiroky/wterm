@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { DndContext, DragOverlay } from '@dnd-kit/core';
 import { useWebSocket } from './hooks/useWebSocket';
 import useStore from './store';
-import { insertSessionIntoTree, removeSessionFromTree } from './utils/layoutTree';
+import { insertSessionIntoTree, removeSessionFromTree, getAllSessionIds } from './utils/layoutTree';
 import Header from './components/Header/Header';
 import Sidebar from './components/Sidebar/Sidebar';
 import TerminalArea from './components/TerminalArea/TerminalArea';
@@ -11,6 +11,7 @@ import StatusBar from './components/StatusBar/StatusBar';
 
 function App() {
   useWebSocket();
+  const hasCleanedUpRef = useRef(false);
   const config = useStore((state) => state.config);
   const setConfig = useStore((state) => state.setConfig);
   const setWorkspaces = useStore((state) => state.setWorkspaces);
@@ -20,6 +21,8 @@ function App() {
   const workspaces = useStore((state) => state.workspaces);
   const activeWorkspaceId = useStore((state) => state.activeWorkspaceId);
   const updateLayout = useStore((state) => state.updateLayout);
+  const sessions = useStore((state) => state.sessions);
+  const updateWorkspace = useStore((state) => state.updateWorkspace);
 
   useEffect(() => {
     // Load config from server
@@ -43,6 +46,59 @@ function App() {
       })
       .catch((err) => console.error('Failed to load workspaces:', err));
   }, [setWorkspaces, setActiveWorkspace]);
+
+  // Clean up workspaces on initial load only
+  useEffect(() => {
+    if (hasCleanedUpRef.current) return;
+    if (workspaces.length === 0 || sessions.length === 0) return;
+
+    // Only run once when both workspaces and sessions are first loaded
+    hasCleanedUpRef.current = true;
+
+    const activeSessions = new Set(sessions.map((s) => s.id));
+    let hasChanges = false;
+
+    workspaces.forEach((workspace) => {
+      if (!workspace.layout) return;
+
+      const layoutSessionIds = getAllSessionIds(workspace.layout);
+      const hasInvalidSessions = layoutSessionIds.some((id) => !activeSessions.has(id));
+
+      if (hasInvalidSessions) {
+        console.log(`Cleaning up workspace ${workspace.id}, removing invalid sessions`);
+        hasChanges = true;
+
+        // Remove invalid sessions from layout
+        let cleanedLayout = workspace.layout;
+        layoutSessionIds.forEach((sessionId) => {
+          if (!activeSessions.has(sessionId)) {
+            console.log(`Removing session ${sessionId} from layout`);
+            if (cleanedLayout) {
+              cleanedLayout = removeSessionFromTree(cleanedLayout, sessionId);
+            }
+          }
+        });
+
+        // Remove invalid sessions from sessions array
+        const cleanedSessions = workspace.sessions.filter((id) => activeSessions.has(id));
+
+        // Update workspace
+        updateWorkspace(workspace.id, { sessions: cleanedSessions });
+        updateLayout(workspace.id, cleanedLayout);
+
+        // Save to server
+        fetch(`/api/workspaces/${workspace.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions: cleanedSessions, layout: cleanedLayout }),
+        }).catch((err) => console.error('Failed to save cleaned workspace:', err));
+      }
+    });
+
+    if (hasChanges) {
+      console.log('Workspace cleanup completed');
+    }
+  }, [workspaces, sessions, updateWorkspace, updateLayout]);
 
   function handleDragStart(event: any) {
     setActiveDragId(event.active.id as string);

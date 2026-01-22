@@ -171,3 +171,45 @@ export function hasSession(tree: LayoutNode | null, sessionId: string): boolean 
 
   return tree.children.some((child) => hasSession(child, sessionId));
 }
+
+/**
+ * ツリー内の特定パスにあるノードのsizes配列を更新
+ * @param tree 現在のレイアウトツリー
+ * @param path ノードへのパス（数値配列、例: [0, 1]）
+ * @param newSizes 新しいsizes配列
+ * @returns 更新されたレイアウトツリー
+ */
+export function updateSizesInTree(
+  tree: LayoutNode | null,
+  path: number[],
+  newSizes: number[]
+): LayoutNode | null {
+  if (!tree) return null;
+
+  // パスが空の場合、現在のノードを更新
+  if (path.length === 0) {
+    if (tree.type === 'split') {
+      return {
+        ...tree,
+        sizes: newSizes,
+      };
+    }
+    return tree;
+  }
+
+  // 分割ノードの場合、パスの最初の要素をインデックスとして使用
+  if (tree.type === 'split') {
+    const [index, ...restPath] = path;
+    const updatedChildren = tree.children.map((child, i) =>
+      i === index ? updateSizesInTree(child, restPath, newSizes) : child
+    );
+
+    return {
+      ...tree,
+      children: updatedChildren.filter((child): child is LayoutNode => child !== null),
+      sizes: tree.sizes,
+    };
+  }
+
+  return tree;
+}

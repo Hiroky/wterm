@@ -1,14 +1,55 @@
+import { useRef, useCallback } from 'react';
 import useStore from '../../store';
 import Terminal from './Terminal';
 import LayoutRenderer from './LayoutRenderer';
+import { updateSizesInTree } from '../../utils/layoutTree';
 
 export default function TerminalArea() {
   const activeWorkspaceId = useStore((state) => state.activeWorkspaceId);
   const workspaces = useStore((state) => state.workspaces);
   const activeSessionId = useStore((state) => state.activeSessionId);
+  const updateLayout = useStore((state) => state.updateLayout);
+
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Get active workspace
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+
+  // Handle layout change (resize)
+  const handleLayoutChange = useCallback(
+    (path: number[], newSizes: number[]) => {
+      if (!workspace || !workspace.layout) return;
+
+      // Update layout tree with new sizes
+      const updatedLayout = updateSizesInTree(workspace.layout, path, newSizes);
+      if (!updatedLayout) return;
+
+      // Update local state immediately
+      updateLayout(workspace.id, updatedLayout);
+
+      // Debounce server save (500ms)
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          const response = await fetch(`/api/workspaces/${workspace.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ layout: updatedLayout }),
+          });
+
+          if (!response.ok) {
+            console.error('Failed to save layout to server');
+          }
+        } catch (error) {
+          console.error('Error saving layout:', error);
+        }
+      }, 500);
+    },
+    [workspace, updateLayout]
+  );
 
   // If no active workspace, show placeholder
   if (!workspace) {
@@ -26,7 +67,7 @@ export default function TerminalArea() {
   if (workspace.layout) {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
-        <LayoutRenderer layout={workspace.layout} />
+        <LayoutRenderer layout={workspace.layout} onLayoutChange={handleLayoutChange} />
       </div>
     );
   }

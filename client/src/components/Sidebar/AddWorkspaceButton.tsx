@@ -22,7 +22,7 @@ export default function AddWorkspaceButton() {
       addWorkspace(data.workspace);
     } catch (error) {
       console.error('Error creating workspace:', error);
-      alert('Failed to create workspace');
+      console.error('Failed to create workspace');
     }
   }
 

@@ -4,7 +4,7 @@ import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree'
 import type { LayoutNode } from '../../types';
 
 export default function ShortcutsMenu() {
-  const { config, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession } = useStore();
+  const { config, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession, addSession } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -35,6 +35,14 @@ export default function ShortcutsMenu() {
 
       const data = await response.json();
       console.log('Shortcut executed, created session:', data.sessionId);
+
+      // 楽観的更新: セッションリストに追加（WebSocketで更新されるまでのプレースホルダー）
+      addSession({
+        id: data.sessionId,
+        status: 'running',
+        createdAt: new Date().toISOString(),
+        command: command,
+      });
 
       // 新しいセッションをアクティブにする
       setActiveSession(data.sessionId);
@@ -74,7 +82,7 @@ export default function ShortcutsMenu() {
       setIsOpen(false);
     } catch (error) {
       console.error('Error executing shortcut:', error);
-      alert('Failed to execute shortcut');
+      console.error('Failed to execute shortcut');
     } finally {
       setIsExecuting(null);
     }

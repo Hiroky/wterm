@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import useStore from '../../store';
 import type { Workspace } from '../../types';
+import { removeSessionFromTree } from '../../utils/layoutTree';
 
 interface WorkspaceItemProps {
   workspace: Workspace;
@@ -12,7 +13,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(workspace.name);
 
-  const { sessions, activeSessionId, setActiveWorkspace, setActiveSession, updateWorkspace, deleteWorkspace } = useStore();
+  const { sessions, activeSessionId, setActiveWorkspace, setActiveSession, updateWorkspace, deleteWorkspace, updateLayout } = useStore();
 
   const workspaceSessions = sessions.filter((s) => workspace.sessions.includes(s.id));
 
@@ -39,8 +40,6 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   async function handleDelete(e: React.MouseEvent) {
     e.stopPropagation();
 
-    if (!confirm(`Delete workspace "${workspace.name}"?`)) return;
-
     try {
       const response = await fetch(`/api/workspaces/${workspace.id}`, {
         method: 'DELETE',
@@ -54,7 +53,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
       deleteWorkspace(workspace.id);
     } catch (error: any) {
       console.error('Error deleting workspace:', error);
-      alert(error.message || 'Failed to delete workspace');
+      console.error(error.message || 'Failed to delete workspace');
     }
   }
 
@@ -85,7 +84,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
       setIsEditing(false);
     } catch (error) {
       console.error('Error updating workspace:', error);
-      alert('Failed to update workspace');
+      console.error('Failed to update workspace');
       setEditName(workspace.name);
       setIsEditing(false);
     }
@@ -118,29 +117,38 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   async function handleDeleteSession(sessionId: string, e: React.MouseEvent) {
     e.stopPropagation();
 
-    if (!confirm(`Delete session ${sessionId}?`)) return;
-
     try {
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
+      // セッションが存在しない場合（404）でも、レイアウトから削除する
+      const isNotFound = response.status === 404;
+
+      if (!response.ok && !isNotFound) {
         throw new Error('Failed to delete session');
       }
 
       // Update workspace sessions list
       const updatedSessions = workspace.sessions.filter((s) => s !== sessionId);
+
+      // Update layout tree to remove the session
+      let updatedLayout = workspace.layout;
+      if (updatedLayout) {
+        updatedLayout = removeSessionFromTree(updatedLayout, sessionId);
+      }
+
       await fetch(`/api/workspaces/${workspace.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessions: updatedSessions }),
+        body: JSON.stringify({ sessions: updatedSessions, layout: updatedLayout }),
       });
 
       updateWorkspace(workspace.id, { sessions: updatedSessions });
+      updateLayout(workspace.id, updatedLayout);
     } catch (error) {
       console.error('Error deleting session:', error);
-      alert('Failed to delete session');
+      console.error('Failed to delete session');
     }
   }
 

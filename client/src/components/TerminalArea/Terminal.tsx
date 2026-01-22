@@ -5,6 +5,7 @@ import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import useStore from '../../store';
 import DropZone from './DropZone';
+import { removeSessionFromTree } from '../../utils/layoutTree';
 import 'xterm/css/xterm.css';
 
 interface Props {
@@ -15,9 +16,15 @@ export default function Terminal({ sessionId }: Props) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
+  const wsConnectionRef = useRef<WebSocket | null>(null);
 
-  const { sessions, config, wsConnection, activeDragId } = useStore();
+  const { sessions, config, wsConnection, activeDragId, activeWorkspaceId, workspaces, updateWorkspace, updateLayout } = useStore();
   const session = sessions.find((s) => s.id === sessionId);
+
+  // Keep wsConnectionRef up to date
+  useEffect(() => {
+    wsConnectionRef.current = wsConnection;
+  }, [wsConnection]);
 
   // Make terminal draggable
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
@@ -51,17 +58,21 @@ export default function Terminal({ sessionId }: Props) {
 
     // Handle input
     term.onData((data) => {
-      if (wsConnection?.readyState === WebSocket.OPEN) {
-        wsConnection.send(
+      const ws = wsConnectionRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
           JSON.stringify({ type: 'input', sessionId, data })
         );
+      } else {
+        console.warn('WebSocket not ready for input');
       }
     });
 
     // Handle resize
     term.onResize(({ cols, rows }) => {
-      if (wsConnection?.readyState === WebSocket.OPEN) {
-        wsConnection.send(
+      const ws = wsConnectionRef.current;
+      if (ws?.readyState === WebSocket.OPEN) {
+        ws.send(
           JSON.stringify({ type: 'resize', sessionId, cols, rows })
         );
       }
@@ -74,8 +85,32 @@ export default function Terminal({ sessionId }: Props) {
     const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
 
+    // Handle parent container resize using ResizeObserver
+    let resizeTimeout: NodeJS.Timeout | null = null;
+    const resizeObserver = new ResizeObserver(() => {
+      // Use requestAnimationFrame to ensure layout is complete
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        requestAnimationFrame(() => {
+          if (fitAddonRef.current) {
+            try {
+              fitAddonRef.current.fit();
+            } catch (e) {
+              // Ignore fit errors during resize
+            }
+          }
+        });
+      }, 10);
+    });
+
+    if (terminalRef.current) {
+      resizeObserver.observe(terminalRef.current);
+    }
+
     return () => {
       window.removeEventListener('resize', handleResize);
+      if (resizeTimeout) clearTimeout(resizeTimeout);
+      resizeObserver.disconnect();
       term.dispose();
       xtermRef.current = null;
     };
@@ -131,20 +166,50 @@ export default function Terminal({ sessionId }: Props) {
   }, [wsConnection, sessionId]);
 
   async function deleteSession() {
-    if (!confirm(`Delete session ${sessionId}?`)) return;
-
     try {
       const response = await fetch(`/api/sessions/${sessionId}`, {
         method: 'DELETE',
       });
 
-      if (!response.ok) {
+      // セッションが存在しない場合（404）でも、レイアウトから削除する
+      const isNotFound = response.status === 404;
+
+      if (!response.ok && !isNotFound) {
         throw new Error('Failed to delete session');
+      }
+
+      // Find the workspace containing this session and update its layout
+      if (activeWorkspaceId) {
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (workspace) {
+          // セッションリストとレイアウトから削除
+          const updatedSessions = workspace.sessions.filter((s) => s !== sessionId);
+
+          // Update layout tree to remove the session
+          let updatedLayout = workspace.layout;
+          if (updatedLayout) {
+            updatedLayout = removeSessionFromTree(updatedLayout, sessionId);
+          }
+
+          await fetch(`/api/workspaces/${workspace.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: updatedSessions, layout: updatedLayout }),
+          });
+
+          updateWorkspace(workspace.id, { sessions: updatedSessions });
+          updateLayout(workspace.id, updatedLayout);
+        }
       }
     } catch (error) {
       console.error('Error deleting session:', error);
-      alert('Failed to delete session');
     }
+  }
+
+  // セッションが存在しない場合は何も表示しない
+  if (!session) {
+    console.warn(`Session ${sessionId} not found in sessions list`);
+    return null;
   }
 
   return (
@@ -179,7 +244,7 @@ export default function Terminal({ sessionId }: Props) {
       </div>
 
       {/* Terminal body */}
-      <div ref={terminalRef} className="flex-1 bg-terminal-bg p-2" />
+      <div ref={terminalRef} className="flex-1 bg-terminal-bg overflow-hidden" />
 
       {/* Drop Zones - shown when dragging another terminal */}
       {showDropZones && (
