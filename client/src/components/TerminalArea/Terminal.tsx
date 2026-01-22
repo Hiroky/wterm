@@ -54,6 +54,7 @@ export default function Terminal({ sessionId }: Props) {
       cursorBlink: true,
       fontSize: config?.terminal?.fontSize || 14,
       fontFamily: config?.terminal?.fontFamily || 'Cascadia Code, Consolas, monospace',
+      bellStyle: 'none',
       theme: {
         background: '#1e1e1e',
         foreground: '#cccccc',
@@ -66,6 +67,11 @@ export default function Terminal({ sessionId }: Props) {
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     term.open(terminalRef.current);
+
+    // Disable bell sound
+    term.onBell(() => {
+      // Do nothing - suppress bell
+    });
 
     // 初回fitは少し遅延させてDOMが完全にレンダリングされるのを待つ
     requestAnimationFrame(() => {
@@ -89,6 +95,50 @@ export default function Terminal({ sessionId }: Props) {
         console.warn('WebSocket not ready for input');
       }
     });
+
+    // Copy to clipboard helper
+    const copySelection = () => {
+      const selection = term.getSelection();
+      if (selection) {
+        navigator.clipboard.writeText(selection).catch((err) => {
+          console.error('Failed to copy:', err);
+        });
+      }
+    };
+
+    // Paste from clipboard helper
+    const pasteFromClipboard = async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          term.paste(text);
+        }
+      } catch (err) {
+        console.error('Failed to paste:', err);
+      }
+    };
+
+    // Right-click: copy if selection exists, paste if no selection
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (term.hasSelection()) {
+        copySelection();
+        term.clearSelection();
+      } else {
+        pasteFromClipboard();
+      }
+    };
+
+    // Mouse up: auto-copy selection (like typical terminal behavior)
+    const handleMouseUp = () => {
+      if (term.hasSelection()) {
+        copySelection();
+      }
+    };
+
+    const termElement = terminalRef.current;
+    termElement?.addEventListener('contextmenu', handleContextMenu);
+    termElement?.addEventListener('mouseup', handleMouseUp);
 
     // Handle resize
     term.onResize(({ cols, rows }) => {
@@ -146,6 +196,8 @@ export default function Terminal({ sessionId }: Props) {
     return () => {
       isDisposedRef.current = true;
       window.removeEventListener('resize', handleResize);
+      termElement?.removeEventListener('contextmenu', handleContextMenu);
+      termElement?.removeEventListener('mouseup', handleMouseUp);
       if (resizeTimeout) clearTimeout(resizeTimeout);
       resizeObserver.disconnect();
       unregisterTerminal(sessionId);

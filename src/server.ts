@@ -350,8 +350,9 @@ async function handleCreateSession(req: any, res: any, corsHeaders: { [key: stri
     res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ sessionId: session.id }));
   } catch (e) {
+    console.error('セッション作成エラー:', e);
     res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Invalid request' }));
+    res.end(JSON.stringify({ error: 'Invalid request', details: String(e) }));
   }
 }
 

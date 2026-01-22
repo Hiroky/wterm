@@ -1,5 +1,6 @@
 // wterm - セッション管理モジュール
 import * as pty from 'node-pty';
+import { execSync } from 'child_process';
 import { getConfig } from './config';
 import type { Session, SessionInfo, Message } from './types';
 import { resolve } from 'path';
@@ -56,6 +57,35 @@ function getBinPath(): string {
 }
 
 /**
+ * 使用するシェルを決定（pwsh優先、なければpowershell.exe）
+ */
+let cachedShell: string | null = null;
+
+function getShellExecutable(): string {
+  if (cachedShell !== null) {
+    return cachedShell;
+  }
+
+  try {
+    // pwsh が存在するか確認し、フルパスを取得
+    const result = execSync('where pwsh', { encoding: 'utf-8' });
+    const pwshPath = result.trim().split('\n')[0].trim();
+    if (pwshPath) {
+      cachedShell = pwshPath;
+      console.log(`PowerShell 7 を使用します: ${pwshPath}`);
+    } else {
+      throw new Error('pwsh not found');
+    }
+  } catch {
+    // pwsh が見つからない場合は powershell.exe を使用
+    cachedShell = 'powershell.exe';
+    console.log('Windows PowerShell (powershell.exe) を使用します');
+  }
+
+  return cachedShell;
+}
+
+/**
  * 新しいセッションを作成
  */
 export function createSession(command: string = '', cwd?: string): Session {
@@ -73,9 +103,10 @@ export function createSession(command: string = '', cwd?: string): Session {
   };
 
   const binPath = getBinPath();
+  const shell = getShellExecutable();
 
   // PowerShellを起動（環境変数を-Commandで設定）
-  const ptyProcess = pty.spawn('powershell.exe', [
+  const ptyProcess = pty.spawn(shell, [
     '-NoLogo',
     '-NoProfile',
     '-NoExit',
@@ -267,9 +298,10 @@ export function restartSession(sessionId: string): boolean {
   };
 
   const binPath = getBinPath();
+  const shell = getShellExecutable();
 
   // 新しいPTYを起動（環境変数を-Commandで設定）
-  const ptyProcess = pty.spawn('powershell.exe', [
+  const ptyProcess = pty.spawn(shell, [
     '-NoLogo',
     '-NoProfile',
     '-NoExit',
