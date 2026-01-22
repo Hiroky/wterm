@@ -47,6 +47,27 @@ export interface TerminalSettings {
   fontSize: number;
 }
 
+// レイアウトノード
+export type LayoutNode =
+  | { type: 'terminal'; sessionId: string }
+  | {
+      type: 'split';
+      direction: 'horizontal' | 'vertical';
+      children: LayoutNode[];
+      sizes: number[];
+    };
+
+// ワークスペース
+export interface Workspace {
+  id: string;
+  name: string;
+  icon: string;
+  sessions: string[];
+  layout: LayoutNode | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // 設定ファイル構造
 export interface Config {
   port: number;
@@ -55,6 +76,8 @@ export interface Config {
   shortcuts: Shortcut[];
   uiLayout: UILayout;
   terminal: TerminalSettings;
+  workspaces?: Workspace[];
+  activeWorkspaceId?: string;
 }
 
 // WebSocketメッセージ型（クライアント→サーバー）

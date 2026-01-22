@@ -3,7 +3,7 @@ import useStore from '../../store';
 import ShortcutsMenu from './ShortcutsMenu';
 
 export default function Header() {
-  const { isConnected } = useStore();
+  const { isConnected, activeWorkspaceId, workspaces, updateWorkspace, setActiveSession } = useStore();
   const [isCreating, setIsCreating] = useState(false);
 
   async function createNewSession() {
@@ -23,6 +23,27 @@ export default function Header() {
 
       const data = await response.json();
       console.log('Session created:', data.sessionId);
+
+      // 新しいセッションをアクティブにする
+      setActiveSession(data.sessionId);
+
+      // セッションをアクティブなワークスペースに追加
+      if (activeWorkspaceId) {
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (workspace) {
+          const updatedSessions = [...workspace.sessions, data.sessionId];
+
+          // バックエンドに更新
+          await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: updatedSessions }),
+          });
+
+          // ローカル状態も更新
+          updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
+        }
+      }
     } catch (error) {
       console.error('Error creating session:', error);
       alert('Failed to create new session');

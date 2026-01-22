@@ -60,6 +60,21 @@ export function loadConfig(): Config {
       },
     };
 
+    // ワークスペースマイグレーション
+    if (!currentConfig.workspaces || currentConfig.workspaces.length === 0) {
+      currentConfig.workspaces = [{
+        id: 'workspace-default',
+        name: 'メイン',
+        icon: '📁',
+        sessions: [],
+        layout: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }];
+      currentConfig.activeWorkspaceId = 'workspace-default';
+      saveConfig(currentConfig);
+    }
+
     return currentConfig;
   } catch (error) {
     console.error('設定ファイルの読み込みに失敗しました:', error);

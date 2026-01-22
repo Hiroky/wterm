@@ -267,6 +267,42 @@ async function handleApiRequest(req: any, res: any, path: string, corsHeaders: {
     return;
   }
 
+  // ワークスペース一覧取得
+  if (path === '/api/workspaces' && req.method === 'GET') {
+    const config = getConfig();
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      workspaces: config.workspaces || [],
+      activeWorkspaceId: config.activeWorkspaceId
+    }));
+    return;
+  }
+
+  // ワークスペース作成
+  if (path === '/api/workspaces' && req.method === 'POST') {
+    await handleCreateWorkspace(req, res, corsHeaders);
+    return;
+  }
+
+  // ワークスペース更新
+  const workspaceUpdateMatch = path.match(/^\/api\/workspaces\/([^/]+)$/);
+  if (workspaceUpdateMatch && req.method === 'PATCH') {
+    await handleUpdateWorkspace(req, res, corsHeaders, workspaceUpdateMatch[1]);
+    return;
+  }
+
+  // ワークスペース削除
+  if (workspaceUpdateMatch && req.method === 'DELETE') {
+    await handleDeleteWorkspace(req, res, corsHeaders, workspaceUpdateMatch[1]);
+    return;
+  }
+
+  // アクティブワークスペース設定
+  if (path === '/api/workspaces/active' && req.method === 'POST') {
+    await handleSetActiveWorkspace(req, res, corsHeaders);
+    return;
+  }
+
   res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Not Found' }));
 }
@@ -354,6 +390,144 @@ async function handleConfigUpdate(req: any, res: any, corsHeaders: { [key: strin
   } catch (e) {
     res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'Invalid config' }));
+  }
+}
+
+/**
+ * ワークスペース作成を処理
+ */
+async function handleCreateWorkspace(req: any, res: any, corsHeaders: { [key: string]: string }): Promise<void> {
+  try {
+    const body = await readBody(req);
+    const parsed = JSON.parse(body);
+    const config = getConfig();
+
+    const newWorkspace = {
+      id: `workspace-${Date.now()}`,
+      name: parsed.name || '新規ワークスペース',
+      icon: parsed.icon || '📁',
+      sessions: [],
+      layout: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    config.workspaces = config.workspaces || [];
+    config.workspaces.push(newWorkspace);
+    saveConfig(config);
+
+    res.writeHead(201, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ workspace: newWorkspace }));
+  } catch (e) {
+    res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid request' }));
+  }
+}
+
+/**
+ * ワークスペース更新を処理
+ */
+async function handleUpdateWorkspace(
+  req: any,
+  res: any,
+  corsHeaders: { [key: string]: string },
+  workspaceId: string
+): Promise<void> {
+  try {
+    const body = await readBody(req);
+    const updates = JSON.parse(body);
+    const config = getConfig();
+
+    const workspace = config.workspaces?.find((w) => w.id === workspaceId);
+    if (!workspace) {
+      res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Workspace not found' }));
+      return;
+    }
+
+    // 更新可能なフィールド
+    if (updates.name !== undefined) workspace.name = updates.name;
+    if (updates.icon !== undefined) workspace.icon = updates.icon;
+    if (updates.layout !== undefined) workspace.layout = updates.layout;
+    if (updates.sessions !== undefined) workspace.sessions = updates.sessions;
+    workspace.updatedAt = new Date().toISOString();
+
+    saveConfig(config);
+
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ workspace }));
+  } catch (e) {
+    res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid request' }));
+  }
+}
+
+/**
+ * ワークスペース削除を処理
+ */
+async function handleDeleteWorkspace(
+  req: any,
+  res: any,
+  corsHeaders: { [key: string]: string },
+  workspaceId: string
+): Promise<void> {
+  try {
+    const config = getConfig();
+
+    if (!config.workspaces || config.workspaces.length <= 1) {
+      res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Cannot delete the last workspace' }));
+      return;
+    }
+
+    const index = config.workspaces.findIndex((w) => w.id === workspaceId);
+    if (index === -1) {
+      res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Workspace not found' }));
+      return;
+    }
+
+    config.workspaces.splice(index, 1);
+
+    // アクティブワークスペースが削除された場合、最初のワークスペースをアクティブにする
+    if (config.activeWorkspaceId === workspaceId) {
+      config.activeWorkspaceId = config.workspaces[0]?.id;
+    }
+
+    saveConfig(config);
+
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
+  } catch (e) {
+    res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid request' }));
+  }
+}
+
+/**
+ * アクティブワークスペース設定を処理
+ */
+async function handleSetActiveWorkspace(req: any, res: any, corsHeaders: { [key: string]: string }): Promise<void> {
+  try {
+    const body = await readBody(req);
+    const { workspaceId } = JSON.parse(body);
+    const config = getConfig();
+
+    const workspace = config.workspaces?.find((w) => w.id === workspaceId);
+    if (!workspace) {
+      res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Workspace not found' }));
+      return;
+    }
+
+    config.activeWorkspaceId = workspaceId;
+    saveConfig(config);
+
+    res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true }));
+  } catch (e) {
+    res.writeHead(400, { ...corsHeaders, 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid request' }));
   }
 }
 

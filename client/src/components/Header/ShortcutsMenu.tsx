@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import useStore from '../../store';
 
 export default function ShortcutsMenu() {
-  const { config } = useStore();
+  const { config, activeWorkspaceId, workspaces, updateWorkspace, setActiveSession } = useStore();
   const [isOpen, setIsOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -33,6 +33,28 @@ export default function ShortcutsMenu() {
 
       const data = await response.json();
       console.log('Shortcut executed, created session:', data.sessionId);
+
+      // 新しいセッションをアクティブにする
+      setActiveSession(data.sessionId);
+
+      // セッションをアクティブなワークスペースに追加
+      if (activeWorkspaceId) {
+        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
+        if (workspace) {
+          const updatedSessions = [...workspace.sessions, data.sessionId];
+
+          // バックエンドに更新
+          await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: updatedSessions }),
+          });
+
+          // ローカル状態も更新
+          updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
+        }
+      }
+
       setIsOpen(false);
     } catch (error) {
       console.error('Error executing shortcut:', error);

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
-import type { SessionInfo, Config, Message } from '../types';
+import type { SessionInfo, Config, Message, Workspace, LayoutNode } from '../types';
 
 interface AppState {
   // State
@@ -10,6 +10,9 @@ interface AppState {
   wsConnection: WebSocket | null;
   isConnected: boolean;
   messages: Message[];
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  activeDragId: string | null;
 
   // Session Actions
   setSessions: (sessions: SessionInfo[]) => void;
@@ -26,9 +29,20 @@ interface AppState {
   setConfig: (config: Config) => void;
   updateConfig: (updates: Partial<Config>) => void;
 
+  // Workspace Actions
+  setWorkspaces: (workspaces: Workspace[]) => void;
+  addWorkspace: (workspace: Workspace) => void;
+  updateWorkspace: (id: string, updates: Partial<Workspace>) => void;
+  deleteWorkspace: (id: string) => void;
+  setActiveWorkspace: (id: string) => void;
+  updateLayout: (workspaceId: string, layout: LayoutNode) => void;
+
   // WebSocket Actions
   setWebSocket: (ws: WebSocket) => void;
   setConnected: (connected: boolean) => void;
+
+  // Drag Actions
+  setActiveDragId: (id: string | null) => void;
 }
 
 const useStore = create<AppState>()(
@@ -40,6 +54,9 @@ const useStore = create<AppState>()(
       wsConnection: null,
       isConnected: false,
       messages: [],
+      workspaces: [],
+      activeWorkspaceId: null,
+      activeDragId: null,
 
       setSessions: (sessions) => set({ sessions }),
 
@@ -77,9 +94,42 @@ const useStore = create<AppState>()(
           config: state.config ? { ...state.config, ...updates } : null,
         })),
 
+      setWorkspaces: (workspaces) => set({ workspaces }),
+
+      addWorkspace: (workspace) =>
+        set((state) => ({
+          workspaces: [...state.workspaces, workspace],
+        })),
+
+      updateWorkspace: (id, updates) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === id ? { ...w, ...updates, updatedAt: new Date().toISOString() } : w
+          ),
+        })),
+
+      deleteWorkspace: (id) =>
+        set((state) => ({
+          workspaces: state.workspaces.filter((w) => w.id !== id),
+          activeWorkspaceId: state.activeWorkspaceId === id ? state.workspaces[0]?.id || null : state.activeWorkspaceId,
+        })),
+
+      setActiveWorkspace: (id) => set({ activeWorkspaceId: id }),
+
+      updateLayout: (workspaceId, layout) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === workspaceId
+              ? { ...w, layout, updatedAt: new Date().toISOString() }
+              : w
+          ),
+        })),
+
       setWebSocket: (ws) => set({ wsConnection: ws }),
 
       setConnected: (connected) => set({ isConnected: connected }),
+
+      setActiveDragId: (id) => set({ activeDragId: id }),
     }),
     { name: 'wterm-store' }
   )

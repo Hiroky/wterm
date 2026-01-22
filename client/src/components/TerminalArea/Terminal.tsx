@@ -1,8 +1,10 @@
 import { useEffect, useRef } from 'react';
+import { useDraggable } from '@dnd-kit/core';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
 import { WebLinksAddon } from 'xterm-addon-web-links';
 import useStore from '../../store';
+import DropZone from './DropZone';
 import 'xterm/css/xterm.css';
 
 interface Props {
@@ -14,8 +16,16 @@ export default function Terminal({ sessionId }: Props) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
-  const { sessions, config, wsConnection } = useStore();
+  const { sessions, config, wsConnection, activeDragId } = useStore();
   const session = sessions.find((s) => s.id === sessionId);
+
+  // Make terminal draggable
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: sessionId,
+  });
+
+  // Show drop zones when dragging another terminal
+  const showDropZones = activeDragId !== null && activeDragId !== sessionId;
 
   // Initialize xterm.js
   useEffect(() => {
@@ -60,11 +70,6 @@ export default function Terminal({ sessionId }: Props) {
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
-    // Attach to session
-    if (wsConnection?.readyState === WebSocket.OPEN) {
-      wsConnection.send(JSON.stringify({ type: 'attach', sessionId }));
-    }
-
     // Handle window resize
     const handleResize = () => fitAddon.fit();
     window.addEventListener('resize', handleResize);
@@ -72,8 +77,37 @@ export default function Terminal({ sessionId }: Props) {
     return () => {
       window.removeEventListener('resize', handleResize);
       term.dispose();
+      xtermRef.current = null;
     };
   }, [sessionId, config]);
+
+  // Attach to session when WebSocket is ready
+  useEffect(() => {
+    if (!wsConnection || !xtermRef.current) return;
+
+    const attachToSession = () => {
+      if (wsConnection.readyState === WebSocket.OPEN) {
+        console.log(`Attaching to session: ${sessionId}`);
+        wsConnection.send(JSON.stringify({ type: 'attach', sessionId }));
+      }
+    };
+
+    // If already open, attach immediately
+    if (wsConnection.readyState === WebSocket.OPEN) {
+      attachToSession();
+    } else {
+      // Otherwise wait for open event
+      wsConnection.addEventListener('open', attachToSession);
+    }
+
+    return () => {
+      wsConnection.removeEventListener('open', attachToSession);
+      if (wsConnection.readyState === WebSocket.OPEN) {
+        console.log(`Detaching from session: ${sessionId}`);
+        wsConnection.send(JSON.stringify({ type: 'detach', sessionId }));
+      }
+    };
+  }, [wsConnection, sessionId]);
 
   // Handle WebSocket output
   useEffect(() => {
@@ -114,10 +148,18 @@ export default function Terminal({ sessionId }: Props) {
   }
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between bg-gray-800 px-3 py-2 text-sm">
+    <div
+      ref={setNodeRef}
+      className={`relative flex h-full flex-col ${isDragging ? 'opacity-50' : ''}`}
+    >
+      {/* Header - Drag Handle */}
+      <div
+        {...listeners}
+        {...attributes}
+        className="flex items-center justify-between bg-gray-800 px-3 py-2 text-sm cursor-move"
+      >
         <div className="flex items-center gap-2">
+          <span className="text-gray-400">⋮⋮</span>
           <span className="font-semibold">{sessionId}</span>
           <span
             className={`rounded px-2 py-0.5 text-xs ${
@@ -127,13 +169,27 @@ export default function Terminal({ sessionId }: Props) {
             {session?.status === 'running' ? 'Running' : 'Exited'}
           </span>
         </div>
-        <button onClick={deleteSession} className="hover:text-red-400">
+        <button
+          onClick={deleteSession}
+          className="hover:text-red-400"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
           ✕
         </button>
       </div>
 
       {/* Terminal body */}
       <div ref={terminalRef} className="flex-1 bg-terminal-bg p-2" />
+
+      {/* Drop Zones - shown when dragging another terminal */}
+      {showDropZones && (
+        <>
+          <DropZone position="top" sessionId={sessionId} />
+          <DropZone position="bottom" sessionId={sessionId} />
+          <DropZone position="left" sessionId={sessionId} />
+          <DropZone position="right" sessionId={sessionId} />
+        </>
+      )}
     </div>
   );
 }
