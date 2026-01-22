@@ -3,6 +3,7 @@ import useStore from '../../store';
 import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
 import type { LayoutNode } from '../../types';
 import ShortcutsMenu from './ShortcutsMenu';
+import SettingsDialog from '../Dialogs/SettingsDialog';
 
 export default function Header() {
   const isConnected = useStore((state) => state.isConnected);
@@ -11,6 +12,7 @@ export default function Header() {
   const updateLayout = useStore((state) => state.updateLayout);
   const setActiveSession = useStore((state) => state.setActiveSession);
   const [isCreating, setIsCreating] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   const createNewSession = useCallback(async () => {
     if (isCreating || !activeWorkspaceId) return;
@@ -105,11 +107,16 @@ export default function Header() {
         <ShortcutsMenu />
         <button
           className="rounded bg-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-600"
-          onClick={() => console.log('Settings coming soon!')}
+          onClick={() => setIsSettingsOpen(true)}
         >
           Settings
         </button>
       </div>
+
+      <SettingsDialog
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
     </header>
   );
 }

@@ -2,6 +2,13 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { SessionInfo, Config, Message, Workspace, LayoutNode } from '../types';
 
+export interface ToastMessage {
+  id: string;
+  type: 'success' | 'error' | 'info' | 'warning';
+  message: string;
+  duration?: number;
+}
+
 interface AppState {
   // State
   sessions: SessionInfo[];
@@ -9,10 +16,12 @@ interface AppState {
   config: Config | null;
   wsConnection: WebSocket | null;
   isConnected: boolean;
+  isReconnecting: boolean;
   messages: Message[];
   workspaces: Workspace[];
   activeWorkspaceId: string | null;
   activeDragId: string | null;
+  toasts: ToastMessage[];
 
   // Session Actions
   setSessions: (sessions: SessionInfo[]) => void;
@@ -40,9 +49,14 @@ interface AppState {
   // WebSocket Actions
   setWebSocket: (ws: WebSocket) => void;
   setConnected: (connected: boolean) => void;
+  setReconnecting: (reconnecting: boolean) => void;
 
   // Drag Actions
   setActiveDragId: (id: string | null) => void;
+
+  // Toast Actions
+  addToast: (toast: Omit<ToastMessage, 'id'>) => void;
+  removeToast: (id: string) => void;
 }
 
 const useStore = create<AppState>()(
@@ -53,10 +67,12 @@ const useStore = create<AppState>()(
       config: null,
       wsConnection: null,
       isConnected: false,
+      isReconnecting: false,
       messages: [],
       workspaces: [],
       activeWorkspaceId: null,
       activeDragId: null,
+      toasts: [],
 
       setSessions: (sessions) => set({ sessions }),
 
@@ -129,7 +145,22 @@ const useStore = create<AppState>()(
 
       setConnected: (connected) => set({ isConnected: connected }),
 
+      setReconnecting: (reconnecting) => set({ isReconnecting: reconnecting }),
+
       setActiveDragId: (id) => set({ activeDragId: id }),
+
+      addToast: (toast) =>
+        set((state) => ({
+          toasts: [
+            ...state.toasts,
+            { ...toast, id: `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` },
+          ],
+        })),
+
+      removeToast: (id) =>
+        set((state) => ({
+          toasts: state.toasts.filter((t) => t.id !== id),
+        })),
     }),
     { name: 'wterm-store' }
   )

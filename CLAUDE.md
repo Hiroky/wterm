@@ -106,6 +106,8 @@ npm run dev:backend  # Node.js (localhost:3000)
 npm run dev:client   # Vite (localhost:5173+)
 ```
 
+**重要:** 開発中は基本的に開発ユーザーがnpm run devをすでに起動中であるため勝手に起動するとポート競合を引き起こすため勝手に開発サーバーを起動しないこと
+
 ### アクセスURL
 - **開発**: http://localhost:5173+
 - **本番**: http://localhost:3000

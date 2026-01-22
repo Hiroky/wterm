@@ -78,6 +78,7 @@ export interface Config {
   terminal: TerminalSettings;
   workspaces?: Workspace[];
   activeWorkspaceId?: string;
+  debugLog?: boolean; // デバッグログの有効/無効
 }
 
 // WebSocketメッセージ型（クライアント→サーバー）

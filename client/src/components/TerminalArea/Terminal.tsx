@@ -6,6 +6,7 @@ import { WebLinksAddon } from 'xterm-addon-web-links';
 import useStore from '../../store';
 import DropZone from './DropZone';
 import { removeSessionFromTree } from '../../utils/layoutTree';
+import { registerTerminal, unregisterTerminal } from '../../utils/terminalRegistry';
 import 'xterm/css/xterm.css';
 
 interface Props {
@@ -102,6 +103,9 @@ export default function Terminal({ sessionId }: Props) {
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
 
+    // レジストリに登録（バッファ取得用）
+    registerTerminal(sessionId, term);
+
     // Handle window resize
     const handleResize = () => {
       if (!isDisposedRef.current && fitAddonRef.current) {
@@ -144,11 +148,34 @@ export default function Terminal({ sessionId }: Props) {
       window.removeEventListener('resize', handleResize);
       if (resizeTimeout) clearTimeout(resizeTimeout);
       resizeObserver.disconnect();
+      unregisterTerminal(sessionId);
       term.dispose();
       xtermRef.current = null;
       fitAddonRef.current = null;
     };
-  }, [sessionId, config]);
+  }, [sessionId]);
+
+  // Update terminal font settings when config changes
+  useEffect(() => {
+    if (!xtermRef.current || !config?.terminal) return;
+
+    const term = xtermRef.current;
+    term.options.fontSize = config.terminal.fontSize;
+    term.options.fontFamily = config.terminal.fontFamily;
+
+    // Re-fit terminal after font change
+    if (fitAddonRef.current) {
+      requestAnimationFrame(() => {
+        if (!isDisposedRef.current && fitAddonRef.current) {
+          try {
+            fitAddonRef.current.fit();
+          } catch (e) {
+            // Ignore fit errors
+          }
+        }
+      });
+    }
+  }, [config?.terminal?.fontSize, config?.terminal?.fontFamily]);
 
   // Attach to session when WebSocket is ready
   useEffect(() => {

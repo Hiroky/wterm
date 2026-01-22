@@ -1,14 +1,26 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import useStore from '../store';
 import type { ServerMessage } from '../types';
 import { removeSessionFromTree, getAllSessionIds } from '../utils/layoutTree';
 
+const MAX_RECONNECT_ATTEMPTS = 10;
+const INITIAL_RECONNECT_DELAY = 1000; // 1 second
+const MAX_RECONNECT_DELAY = 30000; // 30 seconds
+
 export function useWebSocket() {
   const setWebSocket = useStore((state) => state.setWebSocket);
   const setConnected = useStore((state) => state.setConnected);
+  const setReconnecting = useStore((state) => state.setReconnecting);
+  const addToast = useStore((state) => state.addToast);
   const syncInProgressRef = useRef(false);
+  const reconnectAttemptsRef = useRef(0);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const isMountedRef = useRef(true);
 
-  useEffect(() => {
+  const connect = useCallback(() => {
+    if (!isMountedRef.current) return;
+
     // In development, connect to backend directly (localhost:3000)
     // In production, connect to same host
     const isDev = import.meta.env.DEV;
@@ -17,16 +29,65 @@ export function useWebSocket() {
       : `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`;
 
     const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
 
     ws.onopen = () => {
+      if (!isMountedRef.current) {
+        ws.close();
+        return;
+      }
       console.log('WebSocket connected');
       setWebSocket(ws);
       setConnected(true);
+      setReconnecting(false);
+      reconnectAttemptsRef.current = 0;
+
+      // Show success toast if reconnected
+      if (reconnectAttemptsRef.current > 0) {
+        addToast({
+          type: 'success',
+          message: 'Reconnected to server',
+        });
+      }
     };
 
-    ws.onclose = () => {
-      console.log('WebSocket disconnected');
+    ws.onclose = (event) => {
+      if (!isMountedRef.current) return;
+
+      console.log('WebSocket disconnected', event.code, event.reason);
       setConnected(false);
+
+      // Don't reconnect if the close was clean (code 1000) or intentional
+      if (event.code === 1000) {
+        return;
+      }
+
+      // Attempt to reconnect
+      if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
+        setReconnecting(true);
+
+        // Calculate delay with exponential backoff
+        const delay = Math.min(
+          INITIAL_RECONNECT_DELAY * Math.pow(2, reconnectAttemptsRef.current),
+          MAX_RECONNECT_DELAY
+        );
+
+        console.log(
+          `Reconnecting in ${delay}ms (attempt ${reconnectAttemptsRef.current + 1}/${MAX_RECONNECT_ATTEMPTS})`
+        );
+
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectAttemptsRef.current++;
+          connect();
+        }, delay);
+      } else {
+        setReconnecting(false);
+        addToast({
+          type: 'error',
+          message: 'Failed to connect to server. Please reload the page.',
+          duration: 10000,
+        });
+      }
     };
 
     ws.onmessage = (event) => {
@@ -41,11 +102,22 @@ export function useWebSocket() {
     ws.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
+  }, [setWebSocket, setConnected, setReconnecting, addToast]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    connect();
 
     return () => {
-      ws.close();
+      isMountedRef.current = false;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+      }
+      if (wsRef.current) {
+        wsRef.current.close(1000, 'Component unmounting');
+      }
     };
-  }, [setWebSocket, setConnected]);
+  }, [connect]);
 }
 
 /**
