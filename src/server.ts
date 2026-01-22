@@ -419,7 +419,23 @@ async function handleConfigUpdate(req: any, res: any, corsHeaders: { [key: strin
   try {
     const body = await readBody(req);
     const parsed = JSON.parse(body);
-    saveConfig(parsed);
+    const current = getConfig();
+    const merged = {
+      ...current,
+      ...parsed,
+      uiLayout: {
+        ...current.uiLayout,
+        ...parsed.uiLayout,
+      },
+      terminal: {
+        ...current.terminal,
+        ...parsed.terminal,
+      },
+      shortcuts: parsed.shortcuts ?? current.shortcuts,
+      workspaces: parsed.workspaces ?? current.workspaces,
+      activeWorkspaceId: parsed.activeWorkspaceId ?? current.activeWorkspaceId,
+    };
+    saveConfig(merged);
     res.writeHead(200, { ...corsHeaders, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: true }));
   } catch (e) {
