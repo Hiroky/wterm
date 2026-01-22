@@ -3,7 +3,8 @@ import WorkspaceItem from './WorkspaceItem';
 import AddWorkspaceButton from './AddWorkspaceButton';
 
 export default function WorkspaceList() {
-  const { workspaces, activeWorkspaceId } = useStore();
+  const workspaces = useStore((state) => state.workspaces);
+  const activeWorkspaceId = useStore((state) => state.activeWorkspaceId);
 
   return (
     <div className="flex flex-col h-full">

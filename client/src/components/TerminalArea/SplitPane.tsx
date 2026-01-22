@@ -1,4 +1,5 @@
-import { ReactNode, useState, useRef } from 'react';
+import { useState, useRef, Fragment } from 'react';
+import type { ReactNode } from 'react';
 import Divider from './Divider';
 
 interface SplitPaneProps {
@@ -53,9 +54,8 @@ export default function SplitPane({ direction, sizes: initialSizes, children, on
       className={`flex ${isHorizontal ? 'flex-row' : 'flex-col'} h-full w-full`}
     >
       {children.map((child, index) => (
-        <>
+        <Fragment key={index}>
           <div
-            key={index}
             style={{
               flex: `${sizes[index] || 50} 1 0%`,
             }}
@@ -65,12 +65,11 @@ export default function SplitPane({ direction, sizes: initialSizes, children, on
           </div>
           {index < children.length - 1 && (
             <Divider
-              key={`divider-${index}`}
               direction={direction}
               onResize={(delta) => handleResize(index, delta)}
             />
           )}
-        </>
+        </Fragment>
       ))}
     </div>
   );

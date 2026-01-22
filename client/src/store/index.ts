@@ -35,7 +35,7 @@ interface AppState {
   updateWorkspace: (id: string, updates: Partial<Workspace>) => void;
   deleteWorkspace: (id: string) => void;
   setActiveWorkspace: (id: string) => void;
-  updateLayout: (workspaceId: string, layout: LayoutNode) => void;
+  updateLayout: (workspaceId: string, layout: LayoutNode | null) => void;
 
   // WebSocket Actions
   setWebSocket: (ws: WebSocket) => void;

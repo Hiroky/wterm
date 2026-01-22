@@ -17,8 +17,17 @@ export default function Terminal({ sessionId }: Props) {
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsConnectionRef = useRef<WebSocket | null>(null);
+  const isDisposedRef = useRef(false);
 
-  const { sessions, config, wsConnection, activeDragId, activeWorkspaceId, workspaces, updateWorkspace, updateLayout } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const config = useStore((state) => state.config);
+  const wsConnection = useStore((state) => state.wsConnection);
+  const activeDragId = useStore((state) => state.activeDragId);
+  const activeWorkspaceId = useStore((state) => state.activeWorkspaceId);
+  const workspaces = useStore((state) => state.workspaces);
+  const updateWorkspace = useStore((state) => state.updateWorkspace);
+  const updateLayout = useStore((state) => state.updateLayout);
+
   const session = sessions.find((s) => s.id === sessionId);
 
   // Keep wsConnectionRef up to date
@@ -38,6 +47,8 @@ export default function Terminal({ sessionId }: Props) {
   useEffect(() => {
     if (!terminalRef.current || xtermRef.current) return;
 
+    isDisposedRef.current = false;
+
     const term = new XTerm({
       cursorBlink: true,
       fontSize: config?.terminal?.fontSize || 14,
@@ -54,7 +65,17 @@ export default function Terminal({ sessionId }: Props) {
     term.loadAddon(fitAddon);
     term.loadAddon(webLinksAddon);
     term.open(terminalRef.current);
-    fitAddon.fit();
+
+    // 初回fitは少し遅延させてDOMが完全にレンダリングされるのを待つ
+    requestAnimationFrame(() => {
+      if (!isDisposedRef.current && fitAddon) {
+        try {
+          fitAddon.fit();
+        } catch (e) {
+          // Ignore fit errors during initialization
+        }
+      }
+    });
 
     // Handle input
     term.onData((data) => {
@@ -82,17 +103,28 @@ export default function Terminal({ sessionId }: Props) {
     fitAddonRef.current = fitAddon;
 
     // Handle window resize
-    const handleResize = () => fitAddon.fit();
+    const handleResize = () => {
+      if (!isDisposedRef.current && fitAddonRef.current) {
+        try {
+          fitAddonRef.current.fit();
+        } catch (e) {
+          // Ignore fit errors
+        }
+      }
+    };
     window.addEventListener('resize', handleResize);
 
     // Handle parent container resize using ResizeObserver
-    let resizeTimeout: NodeJS.Timeout | null = null;
+    let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
     const resizeObserver = new ResizeObserver(() => {
+      if (isDisposedRef.current) return;
+
       // Use requestAnimationFrame to ensure layout is complete
       if (resizeTimeout) clearTimeout(resizeTimeout);
       resizeTimeout = setTimeout(() => {
+        if (isDisposedRef.current) return;
         requestAnimationFrame(() => {
-          if (fitAddonRef.current) {
+          if (!isDisposedRef.current && fitAddonRef.current) {
             try {
               fitAddonRef.current.fit();
             } catch (e) {
@@ -108,11 +140,13 @@ export default function Terminal({ sessionId }: Props) {
     }
 
     return () => {
+      isDisposedRef.current = true;
       window.removeEventListener('resize', handleResize);
       if (resizeTimeout) clearTimeout(resizeTimeout);
       resizeObserver.disconnect();
       term.dispose();
       xtermRef.current = null;
+      fitAddonRef.current = null;
     };
   }, [sessionId, config]);
 
@@ -206,10 +240,13 @@ export default function Terminal({ sessionId }: Props) {
     }
   }
 
-  // セッションが存在しない場合は何も表示しない
+  // セッションが存在しない場合はローディング表示（LayoutRendererでフィルタリング済みのはず）
   if (!session) {
-    console.warn(`Session ${sessionId} not found in sessions list`);
-    return null;
+    return (
+      <div className="flex h-full items-center justify-center bg-gray-900 text-gray-500">
+        <p className="text-sm">Loading {sessionId}...</p>
+      </div>
+    );
   }
 
   return (

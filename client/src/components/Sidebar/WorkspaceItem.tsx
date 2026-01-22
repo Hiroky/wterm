@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import useStore from '../../store';
 import type { Workspace } from '../../types';
 import { removeSessionFromTree } from '../../utils/layoutTree';
@@ -13,9 +13,18 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(workspace.name);
 
-  const { sessions, activeSessionId, setActiveWorkspace, setActiveSession, updateWorkspace, deleteWorkspace, updateLayout } = useStore();
+  const sessions = useStore((state) => state.sessions);
+  const activeSessionId = useStore((state) => state.activeSessionId);
+  const setActiveWorkspace = useStore((state) => state.setActiveWorkspace);
+  const setActiveSession = useStore((state) => state.setActiveSession);
+  const updateWorkspace = useStore((state) => state.updateWorkspace);
+  const deleteWorkspace = useStore((state) => state.deleteWorkspace);
+  const updateLayout = useStore((state) => state.updateLayout);
 
-  const workspaceSessions = sessions.filter((s) => workspace.sessions.includes(s.id));
+  // ワークスペースに属するセッションのみフィルタ（メモ化）
+  const workspaceSessions = useMemo(() => {
+    return sessions.filter((s) => workspace.sessions.includes(s.id));
+  }, [sessions, workspace.sessions]);
 
   function handleToggleExpand(e: React.MouseEvent) {
     e.stopPropagation();

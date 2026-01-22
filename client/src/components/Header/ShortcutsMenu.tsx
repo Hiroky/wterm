@@ -1,10 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import useStore from '../../store';
 import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
 import type { LayoutNode } from '../../types';
 
 export default function ShortcutsMenu() {
-  const { config, activeWorkspaceId, workspaces, updateWorkspace, updateLayout, setActiveSession, addSession } = useStore();
+  const config = useStore((state) => state.config);
+  const activeWorkspaceId = useStore((state) => state.activeWorkspaceId);
+  const updateWorkspace = useStore((state) => state.updateWorkspace);
+  const updateLayout = useStore((state) => state.updateLayout);
+  const setActiveSession = useStore((state) => state.setActiveSession);
   const [isOpen, setIsOpen] = useState(false);
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -20,7 +24,9 @@ export default function ShortcutsMenu() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  async function executeShortcut(command: string, shortcutId: string) {
+  const executeShortcut = useCallback(async (command: string, shortcutId: string) => {
+    if (!activeWorkspaceId) return;
+
     setIsExecuting(shortcutId);
     try {
       const response = await fetch('/api/sessions', {
@@ -34,59 +40,58 @@ export default function ShortcutsMenu() {
       }
 
       const data = await response.json();
-      console.log('Shortcut executed, created session:', data.sessionId);
-
-      // 楽観的更新: セッションリストに追加（WebSocketで更新されるまでのプレースホルダー）
-      addSession({
-        id: data.sessionId,
-        status: 'running',
-        createdAt: new Date().toISOString(),
-        command: command,
-      });
+      const sessionId = data.sessionId;
+      console.log('Shortcut executed, created session:', sessionId);
 
       // 新しいセッションをアクティブにする
-      setActiveSession(data.sessionId);
+      setActiveSession(sessionId);
 
-      // セッションをアクティブなワークスペースに追加
-      if (activeWorkspaceId) {
-        const workspace = workspaces.find((w) => w.id === activeWorkspaceId);
-        if (workspace) {
-          const updatedSessions = [...workspace.sessions, data.sessionId];
+      // 現在のアクティブワークスペースを取得（最新の状態を取得）
+      const currentWorkspaces = useStore.getState().workspaces;
+      const workspace = currentWorkspaces.find((w) => w.id === activeWorkspaceId);
 
-          // レイアウトを更新
-          let newLayout: LayoutNode;
-
-          if (!workspace.layout) {
-            // レイアウトが空の場合、新しいターミナルノードを作成
-            newLayout = { type: 'terminal', sessionId: data.sessionId };
-          } else {
-            // 既存のレイアウトがある場合、右側に分割
-            const existingSessionIds = getAllSessionIds(workspace.layout);
-            const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
-            newLayout = insertSessionIntoTree(workspace.layout, lastSessionId, data.sessionId, 'right');
-          }
-
-          // バックエンドに更新
-          await fetch(`/api/workspaces/${activeWorkspaceId}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
-          });
-
-          // ローカル状態も更新
-          updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
-          updateLayout(activeWorkspaceId, newLayout);
+      if (workspace) {
+        // 既にこのセッションがワークスペースに含まれていないか確認
+        if (workspace.sessions.includes(sessionId)) {
+          console.log('Session already in workspace, skipping update');
+          setIsOpen(false);
+          return;
         }
+
+        const updatedSessions = [...workspace.sessions, sessionId];
+
+        // レイアウトを更新
+        let newLayout: LayoutNode;
+
+        if (!workspace.layout) {
+          // レイアウトが空の場合、新しいターミナルノードを作成
+          newLayout = { type: 'terminal', sessionId: sessionId };
+        } else {
+          // 既存のレイアウトがある場合、右側に分割
+          const existingSessionIds = getAllSessionIds(workspace.layout);
+          const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
+          newLayout = insertSessionIntoTree(workspace.layout, lastSessionId, sessionId, 'right');
+        }
+
+        // ローカル状態を先に更新
+        updateWorkspace(activeWorkspaceId, { sessions: updatedSessions });
+        updateLayout(activeWorkspaceId, newLayout);
+
+        // バックエンドに更新
+        await fetch(`/api/workspaces/${activeWorkspaceId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
+        });
       }
 
       setIsOpen(false);
     } catch (error) {
       console.error('Error executing shortcut:', error);
-      console.error('Failed to execute shortcut');
     } finally {
       setIsExecuting(null);
     }
-  }
+  }, [activeWorkspaceId, setActiveSession, updateWorkspace, updateLayout]);
 
   const shortcuts = config?.shortcuts || [];
 

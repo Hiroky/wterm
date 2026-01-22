@@ -10,7 +10,7 @@ export default function TerminalArea() {
   const activeSessionId = useStore((state) => state.activeSessionId);
   const updateLayout = useStore((state) => state.updateLayout);
 
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Get active workspace
   const workspace = workspaces.find((w) => w.id === activeWorkspaceId);

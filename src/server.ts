@@ -23,24 +23,38 @@ import { resolve } from 'path';
 import { exec } from 'child_process';
 
 // Bun + node-pty で Socket closed が未処理例外になるケースの回避
-function isSocketClosedError(err: unknown): boolean {
+function isKnownPtyError(err: unknown): boolean {
   const e = err as { code?: string; message?: string } | undefined;
-  return (
-    e?.code === 'ERR_SOCKET_CLOSED' ||
-    (typeof e?.message === 'string' && /socket is closed/i.test(e.message))
-  );
+  const message = e?.message || '';
+
+  // Socket closed エラー（PTYプロセス終了時）
+  if (e?.code === 'ERR_SOCKET_CLOSED' || /socket is closed/i.test(message)) {
+    return true;
+  }
+
+  // AttachConsole failed エラー（Windows conpty終了時）
+  if (/AttachConsole failed/i.test(message)) {
+    return true;
+  }
+
+  // getConsoleProcessList エラー
+  if (/getConsoleProcessList/i.test(message)) {
+    return true;
+  }
+
+  return false;
 }
 
 process.on('uncaughtException', (err) => {
-  if (isSocketClosedError(err)) {
-    // 既知のソケットクローズは無視
+  if (isKnownPtyError(err)) {
+    // 既知のPTYエラーは無視（正常終了時に発生する）
     return;
   }
   console.error('未処理例外:', err);
 });
 
 process.on('unhandledRejection', (err) => {
-  if (isSocketClosedError(err)) {
+  if (isKnownPtyError(err)) {
     return;
   }
   console.error('未処理のPromise拒否:', err);
