@@ -1,28 +1,28 @@
 @echo off
-echo wterm - ãƒžãƒ«ãƒã‚»ãƒƒã‚·ãƒ§ãƒ³ã‚¿ãƒ¼ãƒŸãƒŠãƒ«
+echo wterm - ƒ}ƒ‹ƒ`ƒZƒbƒVƒ‡ƒ“ƒ^[ƒ~ƒiƒ‹
 echo ================================
 echo.
 
 cd /d "%~dp0"
 
-echo ä¾å­˜é–¢ä¿‚ã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ä¸­...
+echo ˆË‘¶ŠÖŒW‚ðƒCƒ“ƒXƒg[ƒ‹’†...
 call npm install
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo ã‚¨ãƒ©ãƒ¼: ä¾å­˜é–¢ä¿‚ã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã«å¤±æ•—ã—ã¾ã—ãŸ
+    echo ƒGƒ‰[: ˆË‘¶ŠÖŒW‚ÌƒCƒ“ƒXƒg[ƒ‹‚ÉŽ¸”s‚µ‚Ü‚µ‚½
     pause
     exit /b 1
 )
 
 echo.
-echo ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ä¾å­˜é–¢ä¿‚ã‚’ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ä¸­...
+echo ƒNƒ‰ƒCƒAƒ“ƒg‚ÌˆË‘¶ŠÖŒW‚ðƒCƒ“ƒXƒg[ƒ‹’†...
 cd client
 call npm install
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo ã‚¨ãƒ©ãƒ¼: ã‚¯ãƒ©ã‚¤ã‚¢ãƒ³ãƒˆã®ä¾å­˜é–¢ä¿‚ã®ã‚¤ãƒ³ã‚¹ãƒˆãƒ¼ãƒ«ã«å¤±æ•—ã—ã¾ã—ãŸ
+    echo ƒGƒ‰[: ƒNƒ‰ƒCƒAƒ“ƒg‚ÌˆË‘¶ŠÖŒW‚ÌƒCƒ“ƒXƒg[ƒ‹‚ÉŽ¸”s‚µ‚Ü‚µ‚½
     pause
     exit /b 1
 )
@@ -30,7 +30,7 @@ if %ERRORLEVEL% neq 0 (
 cd ..
 
 echo.
-echo ã‚µãƒ¼ãƒãƒ¼ã‚’èµ·å‹•ä¸­...
+echo ƒT[ƒo[‚ð‹N“®’†...
 call npm start
 
 pause
