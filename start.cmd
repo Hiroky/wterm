@@ -16,6 +16,20 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
+echo クライアントの依存関係をインストール中...
+cd client
+call npm install
+
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo エラー: クライアントの依存関係のインストールに失敗しました
+    pause
+    exit /b 1
+)
+
+cd ..
+
+echo.
 echo サーバーを起動中...
 call npm start
 

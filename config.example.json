@@ -1,0 +1,19 @@
+{
+  "port": 3000,
+  "maxHistorySize": 50,
+  "bufferSize": 10000,
+  "shortcuts": [
+    {
+      "id": "powershell",
+      "name": "PowerShell",
+      "command": "",
+      "icon": "💻"
+    }
+  ],
+  "uiLayout": {
+    "showSidebar": true,
+    "showHistoryPanel": true,
+    "sidebarPosition": "left",
+    "defaultView": "tab"
+  }
+}
