@@ -7,9 +7,10 @@ import SplitPane from './SplitPane';
 interface LayoutRendererProps {
   layout: LayoutNode | null;
   onLayoutChange?: (path: number[], newSizes: number[]) => void;
+  isActive?: boolean;
 }
 
-export default function LayoutRenderer({ layout, onLayoutChange }: LayoutRendererProps) {
+export default function LayoutRenderer({ layout, onLayoutChange, isActive = true }: LayoutRendererProps) {
   const sessions = useStore((state) => state.sessions);
   const sessionIds = useMemo(() => new Set(sessions.map((s) => s.id)), [sessions]);
 
@@ -41,6 +42,7 @@ export default function LayoutRenderer({ layout, onLayoutChange }: LayoutRendere
       path={[]}
       onLayoutChange={onLayoutChange}
       sessionIds={sessionIds}
+      isActive={isActive}
     />
   );
 }
@@ -50,9 +52,10 @@ interface LayoutNodeRendererProps {
   path: number[];
   onLayoutChange?: (path: number[], newSizes: number[]) => void;
   sessionIds: Set<string>;
+  isActive: boolean;
 }
 
-function LayoutNodeRenderer({ node, path, onLayoutChange, sessionIds }: LayoutNodeRendererProps) {
+function LayoutNodeRenderer({ node, path, onLayoutChange, sessionIds, isActive }: LayoutNodeRendererProps) {
   if (node.type === 'terminal') {
     // セッションが存在しない場合はプレースホルダーを表示
     if (!sessionIds.has(node.sessionId)) {
@@ -62,7 +65,7 @@ function LayoutNodeRenderer({ node, path, onLayoutChange, sessionIds }: LayoutNo
         </div>
       );
     }
-    return <Terminal key={node.sessionId} sessionId={node.sessionId} />;
+    return <Terminal key={node.sessionId} sessionId={node.sessionId} isVisible={isActive} />;
   }
 
   if (node.type === 'split') {
@@ -91,6 +94,7 @@ function LayoutNodeRenderer({ node, path, onLayoutChange, sessionIds }: LayoutNo
           path={path}
           onLayoutChange={onLayoutChange}
           sessionIds={sessionIds}
+          isActive={isActive}
         />
       );
     }
@@ -129,6 +133,7 @@ function LayoutNodeRenderer({ node, path, onLayoutChange, sessionIds }: LayoutNo
               path={[...path, index]}
               onLayoutChange={onLayoutChange}
               sessionIds={sessionIds}
+              isActive={isActive}
             />
           );
         })}

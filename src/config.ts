@@ -9,6 +9,7 @@ const DEFAULT_CONFIG: Config = {
   port: 3000,
   maxHistorySize: 50,
   bufferSize: 10000,
+  processPollingInterval: 2000, // 2秒間隔でプロセス監視
   shortcuts: [
     {
       id: 'powershell',

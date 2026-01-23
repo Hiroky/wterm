@@ -248,7 +248,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
                   </span>
                 </div>
                 <p className="mt-0.5 truncate text-xs text-gray-300">
-                  {session.command || 'PowerShell'}
+                  {session.currentProcess || session.command || 'PowerShell'}
                 </p>
               </div>
               <button

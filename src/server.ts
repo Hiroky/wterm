@@ -16,6 +16,7 @@ import {
   getMessageHistory,
   getAvailableSessionIds,
   setBroadcastFunction,
+  startProcessPolling,
 } from './sessions';
 import type { ClientMessage, ServerMessage } from './types';
 import { readFileSync, existsSync } from 'fs';
@@ -694,6 +695,9 @@ httpServer.listen(config.port, '0.0.0.0', () => {
   console.log(`wterm サーバーが起動しました: http://localhost:${config.port}`);
   console.log(`  ローカル: http://localhost:${config.port}`);
   console.log(`  ネットワーク: http://0.0.0.0:${config.port} (WSL2からもアクセス可能)`);
+
+  // プロセス監視を開始
+  startProcessPolling();
 
   // ブラウザを自動で開く（Windows、開発モード以外）
   if (process.platform === 'win32' && process.env.NODE_ENV !== 'development') {

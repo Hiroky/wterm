@@ -80,6 +80,7 @@ export interface Config {
   workspaces?: Workspace[];
   activeWorkspaceId?: string;
   debugLog?: boolean; // デバッグログの有効/無効
+  processPollingInterval?: number; // プロセス監視間隔（ミリ秒）、0で無効
 }
 
 // WebSocketメッセージ型（クライアント→サーバー）
@@ -105,6 +106,7 @@ export interface SessionInfo {
   createdAt: string;
   command: string;
   exitCode?: number;
+  currentProcess?: string;  // 現在実行中のプロセス名
 }
 
 // API リクエスト/レスポンス型

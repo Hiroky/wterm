@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { Terminal as XTerm } from 'xterm';
 import { FitAddon } from 'xterm-addon-fit';
@@ -11,14 +11,16 @@ import 'xterm/css/xterm.css';
 
 interface Props {
   sessionId: string;
+  isVisible?: boolean;
 }
 
-export default function Terminal({ sessionId }: Props) {
+export default function Terminal({ sessionId, isVisible = true }: Props) {
   const terminalRef = useRef<HTMLDivElement>(null);
   const xtermRef = useRef<XTerm | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const wsConnectionRef = useRef<WebSocket | null>(null);
   const isDisposedRef = useRef(false);
+  const [isTerminalReady, setIsTerminalReady] = useState(false);
 
   const sessions = useStore((state) => state.sessions);
   const config = useStore((state) => state.config);
@@ -39,10 +41,11 @@ export default function Terminal({ sessionId }: Props) {
   // Make terminal draggable
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: sessionId,
+    disabled: !isVisible,
   });
 
   // Show drop zones when dragging another terminal
-  const showDropZones = activeDragId !== null && activeDragId !== sessionId;
+  const showDropZones = isVisible && activeDragId !== null && activeDragId !== sessionId;
 
   // Initialize xterm.js
   useEffect(() => {
@@ -151,6 +154,7 @@ export default function Terminal({ sessionId }: Props) {
 
     xtermRef.current = term;
     fitAddonRef.current = fitAddon;
+    setIsTerminalReady(true);
 
     // レジストリに登録（バッファ取得用）
     registerTerminal(sessionId, term);
@@ -194,6 +198,7 @@ export default function Terminal({ sessionId }: Props) {
 
     return () => {
       isDisposedRef.current = true;
+      setIsTerminalReady(false);
       window.removeEventListener('resize', handleResize);
       termElement?.removeEventListener('contextmenu', handleContextMenu);
       termElement?.removeEventListener('mouseup', handleMouseUp);
@@ -228,9 +233,31 @@ export default function Terminal({ sessionId }: Props) {
     }
   }, [config?.terminal?.fontSize, config?.terminal?.fontFamily]);
 
-  // Attach to session when WebSocket is ready
+  // Re-fit terminal when workspace changes (fixes scroll issues after workspace switch)
   useEffect(() => {
-    if (!wsConnection || !xtermRef.current) return;
+    if (!isVisible || !xtermRef.current || !fitAddonRef.current || !activeWorkspaceId) return;
+
+    // Delay fit to ensure DOM layout is complete
+    const timeoutId = setTimeout(() => {
+      if (!isDisposedRef.current && fitAddonRef.current) {
+        requestAnimationFrame(() => {
+          if (!isDisposedRef.current && fitAddonRef.current) {
+            try {
+              fitAddonRef.current.fit();
+            } catch (e) {
+              // Ignore fit errors
+            }
+          }
+        });
+      }
+    }, 50);
+
+    return () => clearTimeout(timeoutId);
+  }, [activeWorkspaceId, isVisible]);
+
+  // Attach to session when WebSocket is ready and terminal is initialized
+  useEffect(() => {
+    if (!wsConnection || !xtermRef.current || !isTerminalReady) return;
 
     const attachToSession = () => {
       if (wsConnection.readyState === WebSocket.OPEN) {
@@ -254,7 +281,7 @@ export default function Terminal({ sessionId }: Props) {
         wsConnection.send(JSON.stringify({ type: 'detach', sessionId }));
       }
     };
-  }, [wsConnection, sessionId]);
+  }, [wsConnection, sessionId, isTerminalReady]);
 
   // Handle WebSocket output
   useEffect(() => {

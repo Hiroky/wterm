@@ -152,7 +152,7 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                   className="w-full rounded border border-gray-600 bg-gray-700 px-3 py-2 text-white focus:border-blue-500 focus:outline-none"
                 >
                   <option value="Consolas">Consolas</option>
-                  <option value="Kosugi Maru">Kosugi Maru</option>
+                  <option value="BIZ UDゴシック">BIZ UDゴシック</option>
                   <option value="monospace">Monospace</option>
                   <option value="Cascadia Code">Cascadia Code</option>
                   <option value="Fira Code">Fira Code</option>

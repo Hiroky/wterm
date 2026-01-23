@@ -1,6 +1,6 @@
 // wterm - セッション管理モジュール
 import * as pty from 'node-pty';
-import { execSync } from 'child_process';
+import { execSync, exec } from 'child_process';
 import { getConfig } from './config';
 import type { Session, SessionInfo, Message } from './types';
 import { resolve } from 'path';
@@ -10,6 +10,36 @@ const sessions = new Map<string, Session>();
 
 // メッセージ履歴
 const messageHistory: Message[] = [];
+
+function trimOutputBuffer(buffer: string[], maxSize: number): void {
+  let totalSize = 0;
+  for (const chunk of buffer) {
+    totalSize += chunk.length;
+  }
+
+  if (totalSize <= maxSize) {
+    return;
+  }
+
+  while (buffer.length > 0 && totalSize > maxSize) {
+    if (buffer.length === 1) {
+      const chunk = buffer[0];
+      if (chunk.length > maxSize) {
+        buffer[0] = chunk.slice(chunk.length - maxSize);
+      }
+      break;
+    }
+
+    const removed = buffer.shift();
+    if (removed) {
+      totalSize -= removed.length;
+    }
+  }
+}
+
+// プロセス監視用
+let processPollingTimer: ReturnType<typeof setInterval> | null = null;
+const currentProcessMap = new Map<number, string>(); // PID -> プロセス名
 
 // WebSocket broadcast関数（サーバーから注入）
 let broadcastFn: ((message: any) => void) | null = null;
@@ -92,15 +122,23 @@ export function createSession(command: string = '', cwd?: string): Session {
   const config = getConfig();
   const sessionId = generateSessionId();
 
-  // 環境変数を設定
-  const env = {
-    ...process.env,
-    WTERM_API_URL: `http://localhost:${config.port}`,
-    WTERM_SESSION_ID: sessionId,
-    PATH: `${process.env.PATH};${getBinPath()}`,
-    // WSLに環境変数を引き継ぐための設定
-    WSLENV: 'WTERM_API_URL:WTERM_SESSION_ID',
-  };
+  // 環境変数を設定（PATH重複を回避）
+  const env: Record<string, string> = {};
+  for (const key of Object.keys(process.env)) {
+    // PATH系の変数は後で統一して設定するのでスキップ
+    if (key.toLowerCase() !== 'path') {
+      env[key] = process.env[key]!;
+    }
+  }
+
+  // 既存のPATHを取得（大文字小文字を区別しない）
+  const existingPath = process.env.PATH || process.env.Path || process.env.path || '';
+
+  // wterm固有の環境変数を設定
+  env.WTERM_API_URL = `http://localhost:${config.port}`;
+  env.WTERM_SESSION_ID = sessionId;
+  env.PATH = `${existingPath};${getBinPath()}`;
+  env.WSLENV = 'WTERM_API_URL:WTERM_SESSION_ID';
 
   const binPath = getBinPath();
   const shell = getShellExecutable();
@@ -152,10 +190,7 @@ export function createSession(command: string = '', cwd?: string): Session {
 
     // バッファに追加（サイズ制限）
     session.outputBuffer.push(data);
-    const totalSize = session.outputBuffer.join('').length;
-    while (totalSize > config.bufferSize && session.outputBuffer.length > 1) {
-      session.outputBuffer.shift();
-    }
+    trimOutputBuffer(session.outputBuffer, config.bufferSize);
 
     // WebSocketに送信
     if (broadcastFn) {
@@ -241,6 +276,7 @@ export function getSessionList(): SessionInfo[] {
     createdAt: s.createdAt.toISOString(),
     command: s.command,
     exitCode: s.exitCode,
+    currentProcess: s.status === 'running' ? currentProcessMap.get(s.pid) : undefined,
   }));
 }
 
@@ -287,15 +323,23 @@ export function restartSession(sessionId: string): boolean {
 
   const config = getConfig();
 
-  // 環境変数を設定
-  const env = {
-    ...process.env,
-    WTERM_API_URL: `http://localhost:${config.port}`,
-    WTERM_SESSION_ID: sessionId,
-    PATH: `${process.env.PATH};${getBinPath()}`,
-    // WSLに環境変数を引き継ぐための設定
-    WSLENV: 'WTERM_API_URL:WTERM_SESSION_ID',
-  };
+  // 環境変数を設定（PATH重複を回避）
+  const env: Record<string, string> = {};
+  for (const key of Object.keys(process.env)) {
+    // PATH系の変数は後で統一して設定するのでスキップ
+    if (key.toLowerCase() !== 'path') {
+      env[key] = process.env[key]!;
+    }
+  }
+
+  // 既存のPATHを取得（大文字小文字を区別しない）
+  const existingPath = process.env.PATH || process.env.Path || process.env.path || '';
+
+  // wterm固有の環境変数を設定
+  env.WTERM_API_URL = `http://localhost:${config.port}`;
+  env.WTERM_SESSION_ID = sessionId;
+  env.PATH = `${existingPath};${getBinPath()}`;
+  env.WSLENV = 'WTERM_API_URL:WTERM_SESSION_ID';
 
   const binPath = getBinPath();
   const shell = getShellExecutable();
@@ -327,10 +371,7 @@ export function restartSession(sessionId: string): boolean {
   // PTY出力をバッファリングしてWebSocketへ転送
   ptyProcess.onData((data: string) => {
     session.outputBuffer.push(data);
-    const totalSize = session.outputBuffer.join('').length;
-    while (totalSize > config.bufferSize && session.outputBuffer.length > 1) {
-      session.outputBuffer.shift();
-    }
+    trimOutputBuffer(session.outputBuffer, config.bufferSize);
 
     if (broadcastFn) {
       broadcastFn({
@@ -849,4 +890,139 @@ export function getMessageHistory(limit?: number, sessionId?: string): Message[]
  */
 export function getAvailableSessionIds(): string[] {
   return Array.from(sessions.keys());
+}
+
+/**
+ * 全プロセス情報を取得してセッションの子プロセスを特定
+ */
+async function updateProcessInfo(): Promise<boolean> {
+  return new Promise((done) => {
+    // 全プロセスを一度に取得（効率的）
+    exec(
+      'wmic process get ProcessId,ParentProcessId,Name /format:csv',
+      { encoding: 'utf-8', windowsHide: true },
+      (error, stdout) => {
+        if (error) {
+          console.error('プロセス情報取得エラー:', error.message);
+          done(false);
+          return;
+        }
+
+        // CSVパース（形式: Node,Name,ParentProcessId,ProcessId）
+        const lines = stdout.trim().split('\n').filter(line => line.trim());
+        const processMap = new Map<number, { name: string; parentPid: number }>();
+
+        for (const line of lines.slice(1)) { // ヘッダーをスキップ
+          const parts = line.trim().split(',');
+          if (parts.length >= 4) {
+            const name = parts[1];
+            const parentPid = parseInt(parts[2], 10);
+            const pid = parseInt(parts[3], 10);
+            if (!isNaN(pid) && !isNaN(parentPid)) {
+              processMap.set(pid, { name, parentPid });
+            }
+          }
+        }
+
+        let hasChanges = false;
+
+        // 各セッションのPIDに対して子プロセスを探す
+        for (const session of sessions.values()) {
+          if (session.status !== 'running') continue;
+
+          const shellPid = session.pid;
+          let childProcess: string | undefined;
+
+          // 直接の子プロセスを探す（最も最近起動されたもの）
+          for (const [pid, info] of processMap) {
+            if (info.parentPid === shellPid) {
+              // 子プロセスが見つかった
+              // さらにその子プロセスを探す（より深い階層）
+              let deepestChild = info.name;
+              let currentPid = pid;
+
+              // 最大5階層まで探索
+              for (let i = 0; i < 5; i++) {
+                let found = false;
+                for (const [childPid, childInfo] of processMap) {
+                  if (childInfo.parentPid === currentPid) {
+                    deepestChild = childInfo.name;
+                    currentPid = childPid;
+                    found = true;
+                    break;
+                  }
+                }
+                if (!found) break;
+              }
+
+              childProcess = deepestChild;
+              break; // 最初に見つかった子プロセスを使用
+            }
+          }
+
+          const previousProcess = currentProcessMap.get(shellPid);
+          if (childProcess !== previousProcess) {
+            hasChanges = true;
+            if (childProcess) {
+              currentProcessMap.set(shellPid, childProcess);
+            } else {
+              currentProcessMap.delete(shellPid);
+            }
+          }
+        }
+
+        done(hasChanges);
+      }
+    );
+  });
+}
+
+/**
+ * プロセス監視を開始
+ */
+export function startProcessPolling(): void {
+  const config = getConfig();
+  const interval = config.processPollingInterval ?? 2000;
+
+  if (interval <= 0) {
+    console.log('プロセス監視は無効です');
+    return;
+  }
+
+  if (processPollingTimer) {
+    clearInterval(processPollingTimer);
+  }
+
+  console.log(`プロセス監視を開始しました（間隔: ${interval}ms）`);
+
+  processPollingTimer = setInterval(async () => {
+    const hasChanges = await updateProcessInfo();
+    if (hasChanges && broadcastFn) {
+      broadcastFn({
+        type: 'sessions',
+        sessions: getSessionList(),
+      });
+    }
+  }, interval);
+
+  // 初回実行
+  updateProcessInfo().then((hasChanges) => {
+    if (hasChanges && broadcastFn) {
+      broadcastFn({
+        type: 'sessions',
+        sessions: getSessionList(),
+      });
+    }
+  });
+}
+
+/**
+ * プロセス監視を停止
+ */
+export function stopProcessPolling(): void {
+  if (processPollingTimer) {
+    clearInterval(processPollingTimer);
+    processPollingTimer = null;
+    console.log('プロセス監視を停止しました');
+  }
 }
