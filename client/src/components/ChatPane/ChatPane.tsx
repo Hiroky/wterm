@@ -314,7 +314,7 @@ export default function ChatPane() {
             title="現在のセッションに送信 (Ctrl+Enter)"
             className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            送信
+            Send
           </button>
           <button
             onClick={broadcastToAll}
@@ -322,7 +322,7 @@ export default function ChatPane() {
             title="全セッションに送信"
             className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            全送信
+            Broadcast
           </button>
           <button
             onClick={clearInput}

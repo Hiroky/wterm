@@ -107,6 +107,7 @@ export interface SessionInfo {
   command: string;
   exitCode?: number;
   currentProcess?: string;  // 現在実行中のプロセス名
+  cwd?: string;  // カレントディレクトリ
 }
 
 // API リクエスト/レスポンス型

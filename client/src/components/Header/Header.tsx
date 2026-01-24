@@ -11,6 +11,8 @@ export default function Header() {
   const updateWorkspace = useStore((state) => state.updateWorkspace);
   const updateLayout = useStore((state) => state.updateLayout);
   const setActiveSession = useStore((state) => state.setActiveSession);
+  const toggleSidebar = useStore((state) => state.toggleSidebar);
+  const isSidebarCollapsed = useStore((state) => state.isSidebarCollapsed);
   const [isCreating, setIsCreating] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
@@ -87,6 +89,13 @@ export default function Header() {
   return (
     <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
       <div className="flex items-center gap-4">
+        <button
+          onClick={toggleSidebar}
+          className="rounded p-2 text-lg transition-colors hover:bg-gray-700"
+          title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isSidebarCollapsed ? '☰' : '◀'}
+        </button>
         <h1 className="text-xl font-bold">wterm</h1>
         <div className="flex items-center gap-2">
           <div

@@ -22,6 +22,7 @@ interface AppState {
   activeWorkspaceId: string | null;
   activeDragId: string | null;
   toasts: ToastMessage[];
+  isSidebarCollapsed: boolean;
 
   // Session Actions
   setSessions: (sessions: SessionInfo[]) => void;
@@ -57,6 +58,10 @@ interface AppState {
   // Toast Actions
   addToast: (toast: Omit<ToastMessage, 'id'>) => void;
   removeToast: (id: string) => void;
+
+  // Sidebar Actions
+  toggleSidebar: () => void;
+  setSidebarCollapsed: (collapsed: boolean) => void;
 }
 
 const useStore = create<AppState>()(
@@ -73,6 +78,7 @@ const useStore = create<AppState>()(
       activeWorkspaceId: null,
       activeDragId: null,
       toasts: [],
+      isSidebarCollapsed: localStorage.getItem('wterm_sidebar_collapsed') === 'true',
 
       setSessions: (sessions) => set({ sessions }),
 
@@ -161,6 +167,18 @@ const useStore = create<AppState>()(
         set((state) => ({
           toasts: state.toasts.filter((t) => t.id !== id),
         })),
+
+      toggleSidebar: () =>
+        set((state) => {
+          const newCollapsed = !state.isSidebarCollapsed;
+          localStorage.setItem('wterm_sidebar_collapsed', String(newCollapsed));
+          return { isSidebarCollapsed: newCollapsed };
+        }),
+
+      setSidebarCollapsed: (collapsed) => {
+        localStorage.setItem('wterm_sidebar_collapsed', String(collapsed));
+        set({ isSidebarCollapsed: collapsed });
+      },
     }),
     { name: 'wterm-store' }
   )

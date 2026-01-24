@@ -17,6 +17,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
   const setActiveSession = useStore((state) => state.setActiveSession);
   const activeSessionId = useStore((state) => state.activeSessionId);
   const addWorkspace = useStore((state) => state.addWorkspace);
+  const toggleSidebar = useStore((state) => state.toggleSidebar);
 
   // Create new session
   const createNewSession = useCallback(async () => {
@@ -178,6 +179,13 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
         options.onOpenSettings?.();
         return;
       }
+
+      // Ctrl+B for sidebar toggle (only when not in input)
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+        return;
+      }
     }
 
     window.addEventListener('keydown', handleKeyDown);
@@ -187,6 +195,7 @@ export function useKeyboardShortcuts(options: KeyboardShortcutsOptions = {}) {
     deleteCurrentSession,
     switchToWorkspace,
     createNewWorkspace,
+    toggleSidebar,
     options,
   ]);
 

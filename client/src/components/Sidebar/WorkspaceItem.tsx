@@ -34,6 +34,15 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   async function handleSetActive() {
     if (!isActive) {
       setActiveWorkspace(workspace.id);
+
+      // ワークスペース内の最初のセッションに切り替え
+      if (workspace.sessions.length > 0) {
+        const firstSession = sessions.find((s) => s.id === workspace.sessions[0]);
+        if (firstSession) {
+          setActiveSession(firstSession.id);
+        }
+      }
+
       try {
         await fetch('/api/workspaces/active', {
           method: 'POST',
