@@ -19,9 +19,10 @@ import {
   startProcessPolling,
 } from './sessions';
 import type { ClientMessage, ServerMessage } from './types';
-import { readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
-import { exec } from 'child_process';
+import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { join, resolve } from 'path';
+import { exec, spawn } from 'child_process';
+import { tmpdir } from 'os';
 
 // Bun + node-pty で Socket closed が未処理例外になるケースの回避
 function isKnownPtyError(err: unknown): boolean {
@@ -116,6 +117,24 @@ function getStaticRoot(): string {
     return distClientDir;
   }
   return resolve(process.cwd(), 'public');
+}
+
+function getEdgeExecutable(): string | null {
+  const programFilesX86 = process.env['ProgramFiles(x86)'];
+  const programFiles = process.env.ProgramFiles;
+  const candidates: string[] = [];
+  if (programFilesX86) {
+    candidates.push(join(programFilesX86, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  if (programFiles) {
+    candidates.push(join(programFiles, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 function serveStaticFile(path: string): { statusCode: number; headers: Record<string, string>; content: Buffer | string } {
@@ -640,6 +659,17 @@ const httpServer = createServer(handleRequest);
 
 // WebSocketサーバー作成
 const wss = new WebSocketServer({ server: httpServer });
+let isShuttingDown = false;
+
+function shutdownServer(): void {
+  if (isShuttingDown) {
+    return;
+  }
+  isShuttingDown = true;
+  wss.close();
+  httpServer.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 2000);
+}
 
 wss.on('connection', (ws: WebSocket) => {
   const clientId = `client-${++clientIdCounter}`;
@@ -709,6 +739,16 @@ httpServer.listen(config.port, '0.0.0.0', () => {
       // WebViewモード：WebView2(Edge) App Modeで独立ウィンドウとして起動
       console.log('  WebView2モードで起動中...');
       const url = `http://localhost:${config.port}`;
+      const edgeBaseDir =
+        process.env.LOCALAPPDATA ??
+        process.env.APPDATA ??
+        tmpdir();
+      const edgeProfileDir = join(edgeBaseDir, 'wterm', 'webview2-profile');
+      try {
+        mkdirSync(edgeProfileDir, { recursive: true });
+      } catch {
+        // ignore
+      }
       const edgeArgs = [
         '--app=' + url,
         '--window-size=1400,900',
@@ -716,14 +756,36 @@ httpServer.listen(config.port, '0.0.0.0', () => {
         '--disable-features=TranslateUI',
         '--no-first-run',
         '--no-default-browser-check',
-      ].join(' ');
+        '--user-data-dir=' + edgeProfileDir,
+        '--profile-directory=Default',
+      ];
 
-      // Edge(WebView2)を試行
-      exec(`start msedge ${edgeArgs}`, (error) => {
-        if (error) {
-          console.error('  Edge(WebView2)が見つかりません。通常のブラウザで開きます。');
+      const edgeExe = getEdgeExecutable();
+      const edgeCommand = edgeExe ?? 'msedge';
+      const psEscape = (value: string) => value.replace(/'/g, "''");
+      const psArgs = edgeArgs.map((arg) => `'${psEscape(arg)}'`).join(',');
+      const psCommand =
+        `$args = @(${psArgs}); ` +
+        `$p = Start-Process -FilePath '${psEscape(edgeCommand)}' -ArgumentList $args -PassThru; ` +
+        `$p.WaitForExit(); exit $p.ExitCode;`;
+      const child = spawn('powershell', ['-NoProfile', '-Command', psCommand], {
+        windowsHide: false,
+        stdio: 'ignore',
+      });
+
+      child.on('error', () => {
+        console.error('  Edge(WebView2)の起動に失敗しました。通常のブラウザで開きます。');
+        exec(`start ${url}`);
+      });
+
+      child.on('exit', (code) => {
+        if (code && code !== 0) {
+          console.error('  Edge(WebView2)の起動に失敗しました。通常のブラウザで開きます。');
           exec(`start ${url}`);
+          return;
         }
+        console.log('  WebView2が閉じられたためサーバーを終了します。');
+        shutdownServer();
       });
     } else {
       // 通常モード：デフォルトブラウザで開く

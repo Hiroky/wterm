@@ -1,5 +1,7 @@
 @echo off
-echo wterm - マルチセッションターミナル
+setlocal
+
+echo wterm - ビルドセットアップ
 echo ================================
 echo.
 
@@ -30,7 +32,15 @@ if %ERRORLEVEL% neq 0 (
 cd ..
 
 echo.
-echo サーバーを起動中（WebViewモード）...
-call npm run start:webview
+echo フロントエンドをビルド中...
+call npm run build:client
 
-pause
+if %ERRORLEVEL% neq 0 (
+    echo.
+    echo エラー: ビルドに失敗しました
+    pause
+    exit /b 1
+)
+
+echo.
+echo 完了しました。
