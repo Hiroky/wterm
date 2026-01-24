@@ -1,0 +1,7 @@
+<svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
+  <rect width="512" height="512" fill="#1e1e1e"/>
+  <rect x="40" y="40" width="432" height="432" fill="#2d2d2d" rx="16"/>
+  <rect x="40" y="40" width="432" height="60" fill="#333333" rx="16"/>
+  <rect x="40" y="100" width="432" height="372" fill="#1e1e1e"/>
+  <text x="80" y="280" font-family="'Cascadia Code', monospace" font-size="80" fill="#00ff00">>_ wterm</text>
+</svg>

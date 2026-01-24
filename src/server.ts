@@ -690,6 +690,10 @@ wss.on('connection', (ws: WebSocket) => {
   });
 });
 
+// コマンドライン引数を解析
+const args = process.argv.slice(2);
+const webviewMode = args.includes('--webview');
+
 // サーバー起動
 httpServer.listen(config.port, '0.0.0.0', () => {
   console.log(`wterm サーバーが起動しました: http://localhost:${config.port}`);
@@ -701,6 +705,34 @@ httpServer.listen(config.port, '0.0.0.0', () => {
 
   // ブラウザを自動で開く（Windows、開発モード以外）
   if (process.platform === 'win32' && process.env.NODE_ENV !== 'development') {
-    exec(`start http://localhost:${config.port}`);
+    if (webviewMode) {
+      // WebViewモード：Chrome App Modeで独立ウィンドウとして起動
+      console.log('  WebViewモードで起動中...');
+      const url = `http://localhost:${config.port}`;
+      const chromeArgs = [
+        '--app=' + url,
+        '--window-size=1400,900',
+        '--window-position=100,100',
+        '--disable-features=TranslateUI',
+        '--no-first-run',
+        '--no-default-browser-check',
+      ].join(' ');
+
+      // Chrome/Edgeを試行
+      exec(`start chrome ${chromeArgs}`, (error) => {
+        if (error) {
+          // Chromeが見つからない場合、Edgeを試行
+          exec(`start msedge ${chromeArgs}`, (error2) => {
+            if (error2) {
+              console.error('  ChromeまたはEdgeが見つかりません。通常のブラウザで開きます。');
+              exec(`start ${url}`);
+            }
+          });
+        }
+      });
+    } else {
+      // 通常モード：デフォルトブラウザで開く
+      exec(`start http://localhost:${config.port}`);
+    }
   }
 });

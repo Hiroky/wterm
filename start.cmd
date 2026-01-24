@@ -30,7 +30,7 @@ if %ERRORLEVEL% neq 0 (
 cd ..
 
 echo.
-echo サーバーを起動中...
-call npm start
+echo サーバーを起動中（WebViewモード）...
+call npm run start:webview
 
 pause
