@@ -7,7 +7,7 @@ wtermをネイティブアプリのような独立ウィンドウで起動しま
 **WebViewモード**は、ブラウザのアドレスバーやタブバーを非表示にし、ネイティブアプリのような見た目でwtermを起動します。
 
 **特徴:**
-- Chrome/EdgeのApp Mode（`--app`フラグ）を使用
+- **Edge(WebView2)のApp Mode（`--app`フラグ）を使用**
 - ブラウザUI完全非表示
 - タスクバーに独立表示
 - ウィンドウサイズ・位置を自動設定
@@ -76,7 +76,7 @@ tsx src/server.ts -- --webview
 `src/server.ts`の712-719行目を編集：
 
 ```typescript
-const chromeArgs = [
+const edgeArgs = [
   '--app=' + url,
   '--window-size=1600,1000',      // 幅1600、高さ1000
   '--window-position=0,0',        // 左上に配置
@@ -99,16 +99,16 @@ call npm start
 
 ## トラブルシューティング
 
-### ChromeまたはEdgeが見つからない
+### Edge(WebView2)が見つからない
 
 **エラー:**
 ```
-ChromeまたはEdgeが見つかりません。通常のブラウザで開きます。
+Edge(WebView2)が見つかりません。通常のブラウザで開きます。
 ```
 
 **解決策:**
-- ChromeまたはEdgeをインストール
-- パスが通っているか確認（`where chrome`、`where msedge`）
+- Edgeをインストール
+- パスが通っているか確認（`where msedge`）
 - 自動的にデフォルトブラウザで開きます（フォールバック）
 
 ### ウィンドウが開かない
@@ -149,9 +149,9 @@ npm run start:webview
 
 ## 技術詳細
 
-### Chrome App Modeとは
+### Edge App Modeとは
 
-Chromeの`--app`フラグを使用すると、ブラウザUIを非表示にして特定のURLを独立ウィンドウで開けます。
+Edgeの`--app`フラグを使用すると、ブラウザUIを非表示にして特定のURLを独立ウィンドウで開けます。
 
 **使用フラグ:**
 - `--app=URL` - アプリモード起動
@@ -190,7 +190,7 @@ npm run dev
 
 ## 参考リンク
 
-- [Chrome App Mode公式ドキュメント](https://developer.chrome.com/docs/web-platform/app-shortcuts)
+- [Microsoft Edge - command-line options](https://learn.microsoft.com/microsoft-edge/devtools-guide-chromium/command-line-options)
 - [Chromium Command Line Switches](https://peter.sh/experiments/chromium-command-line-switches/)
 
 ---

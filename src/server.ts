@@ -706,10 +706,10 @@ httpServer.listen(config.port, '0.0.0.0', () => {
   // ブラウザを自動で開く（Windows、開発モード以外）
   if (process.platform === 'win32' && process.env.NODE_ENV !== 'development') {
     if (webviewMode) {
-      // WebViewモード：Chrome App Modeで独立ウィンドウとして起動
-      console.log('  WebViewモードで起動中...');
+      // WebViewモード：WebView2(Edge) App Modeで独立ウィンドウとして起動
+      console.log('  WebView2モードで起動中...');
       const url = `http://localhost:${config.port}`;
-      const chromeArgs = [
+      const edgeArgs = [
         '--app=' + url,
         '--window-size=1400,900',
         '--window-position=100,100',
@@ -718,16 +718,11 @@ httpServer.listen(config.port, '0.0.0.0', () => {
         '--no-default-browser-check',
       ].join(' ');
 
-      // Chrome/Edgeを試行
-      exec(`start chrome ${chromeArgs}`, (error) => {
+      // Edge(WebView2)を試行
+      exec(`start msedge ${edgeArgs}`, (error) => {
         if (error) {
-          // Chromeが見つからない場合、Edgeを試行
-          exec(`start msedge ${chromeArgs}`, (error2) => {
-            if (error2) {
-              console.error('  ChromeまたはEdgeが見つかりません。通常のブラウザで開きます。');
-              exec(`start ${url}`);
-            }
-          });
+          console.error('  Edge(WebView2)が見つかりません。通常のブラウザで開きます。');
+          exec(`start ${url}`);
         }
       });
     } else {
