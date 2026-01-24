@@ -8,11 +8,22 @@ interface LayoutRendererProps {
   layout: LayoutNode | null;
   onLayoutChange?: (path: number[], newSizes: number[]) => void;
   isActive?: boolean;
+  workspaceSessionIds?: string[];
 }
 
-export default function LayoutRenderer({ layout, onLayoutChange, isActive = true }: LayoutRendererProps) {
+export default function LayoutRenderer({ layout, onLayoutChange, isActive = true, workspaceSessionIds }: LayoutRendererProps) {
   const sessions = useStore((state) => state.sessions);
-  const sessionIds = useMemo(() => new Set(sessions.map((s) => s.id)), [sessions]);
+
+  // ワークスペースに属するセッションのみをフィルタリング
+  const sessionIds = useMemo(() => {
+    if (workspaceSessionIds) {
+      // ワークスペースに属し、かつ実際に存在するセッションのみ
+      const existingSessionIds = new Set(sessions.map((s) => s.id));
+      return new Set(workspaceSessionIds.filter((id) => existingSessionIds.has(id)));
+    }
+    // フォールバック: 全セッション
+    return new Set(sessions.map((s) => s.id));
+  }, [sessions, workspaceSessionIds]);
 
   if (!layout) {
     return (
@@ -25,12 +36,13 @@ export default function LayoutRenderer({ layout, onLayoutChange, isActive = true
     );
   }
 
-  // セッションがまだ読み込まれていない場合はローディング表示
-  if (sessions.length === 0) {
+  // ワークスペースに属するセッションがない場合
+  if (sessionIds.size === 0) {
     return (
       <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
         <div className="text-center">
-          <p className="text-lg">Loading sessions...</p>
+          <p className="text-lg">No sessions in this workspace</p>
+          <p className="mt-2 text-sm">Create a new session to get started</p>
         </div>
       </div>
     );

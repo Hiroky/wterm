@@ -10,7 +10,6 @@ import Header from './components/Header/Header';
 import Sidebar from './components/Sidebar/Sidebar';
 import TerminalArea from './components/TerminalArea/TerminalArea';
 import ChatPane from './components/ChatPane/ChatPane';
-import StatusBar from './components/StatusBar/StatusBar';
 import HelpDialog from './components/Dialogs/HelpDialog';
 import Toast from './components/Toast/Toast';
 
@@ -160,7 +159,6 @@ function App() {
           </div>
           {showSidebar && sidebarPosition === 'right' && <Sidebar />}
         </div>
-        <StatusBar />
       </div>
 
       {/* Drag Overlay for visual feedback */}

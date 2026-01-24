@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import useStore from '../../store';
-import type { Workspace } from '../../types';
-import { removeSessionFromTree } from '../../utils/layoutTree';
+import type { Workspace, LayoutNode } from '../../types';
+import { removeSessionFromTree, insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
 
 interface WorkspaceItemProps {
   workspace: Workspace;
@@ -12,6 +12,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
   const [isExpanded, setIsExpanded] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(workspace.name);
+  const [isCreatingSession, setIsCreatingSession] = useState(false);
 
   const sessions = useStore((state) => state.sessions);
   const activeSessionId = useStore((state) => state.activeSessionId);
@@ -35,12 +36,16 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
     if (!isActive) {
       setActiveWorkspace(workspace.id);
 
-      // ワークスペース内の最初のセッションに切り替え
+      // ワークスペース内の最初のセッションに切り替え、または空ならクリア
       if (workspace.sessions.length > 0) {
         const firstSession = sessions.find((s) => s.id === workspace.sessions[0]);
         if (firstSession) {
           setActiveSession(firstSession.id);
+        } else {
+          setActiveSession(null);
         }
+      } else {
+        setActiveSession(null);
       }
 
       try {
@@ -174,6 +179,87 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
     }
   }
 
+  const handleAddSession = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+
+    if (isCreatingSession) return;
+
+    setIsCreatingSession(true);
+    try {
+      // ワークスペースの cwd を使用
+      const cwd = workspace.cwd;
+
+      const response = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cwd }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create session');
+      }
+
+      const data = await response.json();
+      const sessionId = data.sessionId;
+      console.log('Session created:', sessionId);
+
+      // セッションをアクティブにする
+      setActiveSession(sessionId);
+
+      // このワークスペースがアクティブでない場合、アクティブ化
+      if (!isActive) {
+        setActiveWorkspace(workspace.id);
+        await fetch('/api/workspaces/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ workspaceId: workspace.id }),
+        });
+      }
+
+      // ワークスペースを再取得（最新の状態を使用）
+      const currentWorkspaces = useStore.getState().workspaces;
+      const currentWorkspace = currentWorkspaces.find((w) => w.id === workspace.id);
+
+      if (currentWorkspace) {
+        // 既にこのセッションがワークスペースに含まれていないか確認
+        if (currentWorkspace.sessions.includes(sessionId)) {
+          console.log('Session already in workspace, skipping update');
+          return;
+        }
+
+        const updatedSessions = [...currentWorkspace.sessions, sessionId];
+
+        // レイアウトを更新
+        let newLayout: LayoutNode;
+
+        if (!currentWorkspace.layout) {
+          // レイアウトが空の場合、新しいターミナルノードを作成
+          newLayout = { type: 'terminal', sessionId: sessionId };
+        } else {
+          // 既存のレイアウトがある場合、右側に分割
+          const existingSessionIds = getAllSessionIds(currentWorkspace.layout);
+          const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
+          newLayout = insertSessionIntoTree(currentWorkspace.layout, lastSessionId, sessionId, 'right');
+        }
+
+        // ローカル状態を先に更新
+        updateWorkspace(workspace.id, { sessions: updatedSessions });
+        updateLayout(workspace.id, newLayout);
+
+        // バックエンドに更新
+        await fetch(`/api/workspaces/${workspace.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
+        });
+      }
+    } catch (error) {
+      console.error('Error creating session:', error);
+    } finally {
+      setIsCreatingSession(false);
+    }
+  }, [isCreatingSession, workspace, isActive, setActiveSession, setActiveWorkspace, updateWorkspace, updateLayout]);
+
   return (
     <div className="rounded bg-gray-700">
       {/* Workspace Header */}
@@ -231,7 +317,7 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
       </div>
 
       {/* Sessions List */}
-      {isExpanded && workspaceSessions.length > 0 && (
+      {isExpanded && (
         <div className="ml-4 space-y-1 border-l border-gray-600 p-2">
           {workspaceSessions.map((session) => (
             <div
@@ -268,12 +354,16 @@ export default function WorkspaceItem({ workspace, isActive }: WorkspaceItemProp
               </button>
             </div>
           ))}
-        </div>
-      )}
 
-      {isExpanded && workspaceSessions.length === 0 && (
-        <div className="ml-4 p-2 text-center text-xs text-gray-400">
-          No sessions in this workspace
+          {/* Add Session Button */}
+          <button
+            onClick={handleAddSession}
+            disabled={isCreatingSession}
+            className="flex w-full items-center gap-2 rounded p-2 text-xs text-gray-400 transition-colors hover:bg-gray-600 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <span className="text-base">+</span>
+            <span>{isCreatingSession ? 'Creating...' : 'Add Session'}</span>
+          </button>
         </div>
       )}
     </div>

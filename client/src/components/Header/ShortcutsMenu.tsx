@@ -103,7 +103,7 @@ export default function ShortcutsMenu() {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="rounded bg-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-600"
+        className="rounded bg-gray-700 px-3 py-1 text-xs font-medium hover:bg-gray-600"
       >
         Shortcuts ▾
       </button>

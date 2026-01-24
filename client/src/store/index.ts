@@ -29,7 +29,7 @@ interface AppState {
   addSession: (session: SessionInfo) => void;
   removeSession: (id: string) => void;
   updateSessionStatus: (id: string, status: 'running' | 'exited', exitCode?: number) => void;
-  setActiveSession: (id: string) => void;
+  setActiveSession: (id: string | null) => void;
 
   // Message Actions
   addMessage: (message: Message) => void;

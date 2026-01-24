@@ -87,23 +87,23 @@ export default function Header() {
   }, [isCreating, activeWorkspaceId, updateWorkspace, updateLayout, setActiveSession]);
 
   return (
-    <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-4 py-2">
-      <div className="flex items-center gap-4">
+    <header className="flex items-center justify-between border-b border-gray-700 bg-gray-800 px-3 py-1">
+      <div className="flex items-center gap-3">
         <button
           onClick={toggleSidebar}
-          className="rounded p-2 text-lg transition-colors hover:bg-gray-700"
+          className="rounded p-1 text-base transition-colors hover:bg-gray-700"
           title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
         >
           {isSidebarCollapsed ? '☰' : '◀'}
         </button>
-        <h1 className="text-xl font-bold">wterm</h1>
-        <div className="flex items-center gap-2">
+        <h1 className="text-lg font-bold">wterm</h1>
+        <div className="flex items-center gap-1.5">
           <div
-            className={`h-2 w-2 rounded-full ${
+            className={`h-1.5 w-1.5 rounded-full ${
               isConnected ? 'bg-green-500' : 'bg-red-500'
             }`}
           />
-          <span className="text-sm text-gray-400">
+          <span className="text-xs text-gray-400">
             {isConnected ? 'Connected' : 'Disconnected'}
           </span>
         </div>
@@ -113,13 +113,13 @@ export default function Header() {
         <button
           onClick={createNewSession}
           disabled={isCreating || !isConnected}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded bg-blue-600 px-3 py-1 text-xs font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {isCreating ? 'Creating...' : '+ New Session'}
         </button>
         <ShortcutsMenu />
         <button
-          className="rounded bg-gray-700 px-4 py-2 text-sm font-medium hover:bg-gray-600"
+          className="rounded bg-gray-700 px-3 py-1 text-xs font-medium hover:bg-gray-600"
           onClick={() => setIsSettingsOpen(true)}
         >
           Settings

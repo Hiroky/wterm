@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import useStore from '../../store';
-import type { Workspace } from '../../types';
+import type { Workspace, LayoutNode } from '../../types';
+import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
 
 export default function CompactWorkspaceList() {
   const workspaces = useStore((state) => state.workspaces);
@@ -13,12 +14,18 @@ export default function CompactWorkspaceList() {
   async function handleWorkspaceClick(workspaceId: string) {
     setActiveWorkspace(workspaceId);
 
-    // ワークスペース内の最初のセッションに切り替え
+    // ワークスペース内の最初のセッションに切り替え、または空ならクリア
     const workspace = workspaces.find((w) => w.id === workspaceId);
-    if (workspace && workspace.sessions.length > 0) {
-      const firstSession = sessions.find((s) => s.id === workspace.sessions[0]);
-      if (firstSession) {
-        setActiveSession(firstSession.id);
+    if (workspace) {
+      if (workspace.sessions.length > 0) {
+        const firstSession = sessions.find((s) => s.id === workspace.sessions[0]);
+        if (firstSession) {
+          setActiveSession(firstSession.id);
+        } else {
+          setActiveSession(null);
+        }
+      } else {
+        setActiveSession(null);
       }
     }
 
@@ -59,7 +66,12 @@ export default function CompactWorkspaceList() {
     const [hoveredSessionId, setHoveredSessionId] = useState<string | null>(null);
     const [isWorkspaceHovered, setIsWorkspaceHovered] = useState(false);
     const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
     const isActive = activeWorkspaceId === workspace.id;
+    const updateWorkspace = useStore((state) => state.updateWorkspace);
+    const updateLayout = useStore((state) => state.updateLayout);
+    const wsSetActiveSession = useStore((state) => state.setActiveSession);
+    const wsSetActiveWorkspace = useStore((state) => state.setActiveWorkspace);
 
     function handleWorkspaceMouseEnter(event: React.MouseEvent<HTMLButtonElement>) {
       const rect = event.currentTarget.getBoundingClientRect();
@@ -88,6 +100,85 @@ export default function CompactWorkspaceList() {
       setHoveredSessionId(null);
       setTooltipPosition(null);
     }
+
+    const handleAddSession = useCallback(async () => {
+      if (isCreatingSession) return;
+
+      setIsCreatingSession(true);
+      try {
+        // ワークスペースの cwd を使用
+        const cwd = workspace.cwd;
+
+        const response = await fetch('/api/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cwd }),
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create session');
+        }
+
+        const data = await response.json();
+        const sessionId = data.sessionId;
+        console.log('Session created:', sessionId);
+
+        // セッションをアクティブにする
+        wsSetActiveSession(sessionId);
+
+        // このワークスペースがアクティブでない場合、アクティブ化
+        if (!isActive) {
+          wsSetActiveWorkspace(workspace.id);
+          await fetch('/api/workspaces/active', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workspaceId: workspace.id }),
+          });
+        }
+
+        // ワークスペースを再取得（最新の状態を使用）
+        const currentWorkspaces = useStore.getState().workspaces;
+        const currentWorkspace = currentWorkspaces.find((w) => w.id === workspace.id);
+
+        if (currentWorkspace) {
+          // 既にこのセッションがワークスペースに含まれていないか確認
+          if (currentWorkspace.sessions.includes(sessionId)) {
+            console.log('Session already in workspace, skipping update');
+            return;
+          }
+
+          const updatedSessions = [...currentWorkspace.sessions, sessionId];
+
+          // レイアウトを更新
+          let newLayout: LayoutNode;
+
+          if (!currentWorkspace.layout) {
+            // レイアウトが空の場合、新しいターミナルノードを作成
+            newLayout = { type: 'terminal', sessionId: sessionId };
+          } else {
+            // 既存のレイアウトがある場合、右側に分割
+            const existingSessionIds = getAllSessionIds(currentWorkspace.layout);
+            const lastSessionId = existingSessionIds[existingSessionIds.length - 1];
+            newLayout = insertSessionIntoTree(currentWorkspace.layout, lastSessionId, sessionId, 'right');
+          }
+
+          // ローカル状態を先に更新
+          updateWorkspace(workspace.id, { sessions: updatedSessions });
+          updateLayout(workspace.id, newLayout);
+
+          // バックエンドに更新
+          await fetch(`/api/workspaces/${workspace.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessions: updatedSessions, layout: newLayout }),
+          });
+        }
+      } catch (error) {
+        console.error('Error creating session:', error);
+      } finally {
+        setIsCreatingSession(false);
+      }
+    }, [isCreatingSession, workspace, isActive, wsSetActiveSession, wsSetActiveWorkspace, updateWorkspace, updateLayout]);
 
     return (
       <div className="flex flex-col items-end gap-1 pr-2">
@@ -133,74 +224,82 @@ export default function CompactWorkspaceList() {
         )}
 
         {/* Session Icons */}
-        {workspaceSessions.length > 0 && (
-          <div className="flex flex-wrap justify-end gap-1">
-            {workspaceSessions.map((session) => {
-              const isSessionActive = activeSessionId === session.id;
-              const isHovered = hoveredSessionId === session.id;
-              return (
-                <div
-                  key={session.id}
-                  className="relative"
-                  onMouseEnter={(e) => handleSessionMouseEnter(session.id, e)}
-                  onMouseLeave={handleSessionMouseLeave}
+        <div className="flex flex-wrap justify-end gap-1">
+          {workspaceSessions.map((session) => {
+            const isSessionActive = activeSessionId === session.id;
+            const isHovered = hoveredSessionId === session.id;
+            return (
+              <div
+                key={session.id}
+                className="relative"
+                onMouseEnter={(e) => handleSessionMouseEnter(session.id, e)}
+                onMouseLeave={handleSessionMouseLeave}
+              >
+                <button
+                  onClick={() => handleSessionClick(session.id, workspace.id)}
+                  className={`relative flex h-8 w-8 items-center justify-center rounded text-xs font-medium transition-colors ${
+                    isSessionActive ? 'bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'
+                  }`}
                 >
-                  <button
-                    onClick={() => handleSessionClick(session.id, workspace.id)}
-                    className={`relative flex h-8 w-8 items-center justify-center rounded text-xs font-medium transition-colors ${
-                      isSessionActive ? 'bg-blue-500' : 'bg-gray-700 hover:bg-gray-600'
+                  {session.id.replace('session-', '')}
+                  {/* Status indicator */}
+                  <div
+                    className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-gray-800 ${
+                      session.status === 'running' ? 'bg-green-500' : 'bg-red-500'
                     }`}
-                  >
-                    {session.id.replace('session-', '')}
-                    {/* Status indicator */}
-                    <div
-                      className={`absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full border border-gray-800 ${
-                        session.status === 'running' ? 'bg-green-500' : 'bg-red-500'
-                      }`}
-                    />
-                  </button>
+                  />
+                </button>
 
-                  {/* Custom tooltip */}
-                  {isHovered && tooltipPosition && (
-                    <div
-                      className="fixed z-50 w-56 rounded-lg border border-gray-600 bg-gray-800 p-3 shadow-xl"
-                      style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-sm font-semibold">{session.id}</span>
-                        <span
-                          className={`rounded px-2 py-0.5 text-xs ${
-                            session.status === 'running' ? 'bg-green-600' : 'bg-red-600'
-                          }`}
-                        >
-                          {session.status}
-                        </span>
-                      </div>
-                      <div className="space-y-1 text-xs text-gray-300">
-                        <div>
-                          <span className="text-gray-400">Process: </span>
-                          {session.currentProcess || session.command || 'PowerShell'}
-                        </div>
-                        {session.cwd && (
-                          <div>
-                            <span className="text-gray-400">Path: </span>
-                            <div className="break-all">{session.cwd}</div>
-                          </div>
-                        )}
-                        {session.status === 'exited' && session.exitCode !== undefined && (
-                          <div>
-                            <span className="text-gray-400">Exit code: </span>
-                            {session.exitCode}
-                          </div>
-                        )}
-                      </div>
+                {/* Custom tooltip */}
+                {isHovered && tooltipPosition && (
+                  <div
+                    className="fixed z-50 w-56 rounded-lg border border-gray-600 bg-gray-800 p-3 shadow-xl"
+                    style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
+                  >
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold">{session.id}</span>
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          session.status === 'running' ? 'bg-green-600' : 'bg-red-600'
+                        }`}
+                      >
+                        {session.status}
+                      </span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+                    <div className="space-y-1 text-xs text-gray-300">
+                      <div>
+                        <span className="text-gray-400">Process: </span>
+                        {session.currentProcess || session.command || 'PowerShell'}
+                      </div>
+                      {session.cwd && (
+                        <div>
+                          <span className="text-gray-400">Path: </span>
+                          <div className="break-all">{session.cwd}</div>
+                        </div>
+                      )}
+                      {session.status === 'exited' && session.exitCode !== undefined && (
+                        <div>
+                          <span className="text-gray-400">Exit code: </span>
+                          {session.exitCode}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Add Session Button */}
+          <button
+            onClick={handleAddSession}
+            disabled={isCreatingSession}
+            title={isCreatingSession ? 'Creating...' : 'Add session to workspace'}
+            className="flex h-8 w-8 items-center justify-center rounded bg-gray-700 text-base transition-colors hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            +
+          </button>
+        </div>
       </div>
     );
   }

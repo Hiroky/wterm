@@ -74,52 +74,35 @@ export default function TerminalArea() {
     );
   }
 
+  // Render only the active workspace
+  if (activeWorkspace.layout) {
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <LayoutRenderer
+          layout={activeWorkspace.layout}
+          onLayoutChange={(path, newSizes) => handleLayoutChange(activeWorkspace, path, newSizes)}
+          isActive={true}
+          workspaceSessionIds={activeWorkspace.sessions}
+        />
+      </div>
+    );
+  }
+
+  // Backward compatibility: show active session if no layout
+  if (!activeSessionId) {
+    return (
+      <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
+        <div className="text-center">
+          <p className="text-lg">No active session</p>
+          <p className="mt-2 text-sm">Select a session from the sidebar or create a new one</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="relative flex flex-1 flex-col overflow-hidden">
-      {workspaces.map((workspace) => {
-        const isActive = workspace.id === activeWorkspaceId;
-        const layerClass = `absolute inset-0 flex flex-col overflow-hidden ${
-          isActive ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-        }`;
-
-        if (workspace.layout) {
-          return (
-            <div key={workspace.id} className={layerClass} aria-hidden={!isActive}>
-              <LayoutRenderer
-                layout={workspace.layout}
-                onLayoutChange={(path, newSizes) => handleLayoutChange(workspace, path, newSizes)}
-                isActive={isActive}
-              />
-            </div>
-          );
-        }
-
-        // Backward compatibility: show active session only for the active workspace
-        if (isActive) {
-          if (!activeSessionId) {
-            return (
-              <div key={workspace.id} className={layerClass} aria-hidden={!isActive}>
-                <div className="flex flex-1 items-center justify-center bg-gray-900 text-gray-400">
-                  <div className="text-center">
-                    <p className="text-lg">No active session</p>
-                    <p className="mt-2 text-sm">Select a session from the sidebar or create a new one</p>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-
-          return (
-            <div key={workspace.id} className={layerClass} aria-hidden={!isActive}>
-              <Terminal sessionId={activeSessionId} isVisible={isActive} />
-            </div>
-          );
-        }
-
-        return (
-          <div key={workspace.id} className={layerClass} aria-hidden={!isActive} />
-        );
-      })}
+    <div className="flex flex-1 flex-col overflow-hidden">
+      <Terminal sessionId={activeSessionId} isVisible={true} />
     </div>
   );
 }

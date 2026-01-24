@@ -287,32 +287,51 @@ export default function ChatPane() {
       )}
 
       {/* ツールバー */}
-      <div className="flex items-center justify-between border-b border-gray-700 px-3 py-2">
-        {/* 左側: バッファ取得ボタン */}
-        <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="flex items-center justify-between gap-2 border-b border-gray-700 px-3 py-1">
+        {/* 左側: 現在のセッション表示 + バッファ取得ボタン */}
+        <div className="flex items-center gap-2 overflow-x-auto">
+          {/* 現在のセッション表示 */}
+          {activeSessionId && (
+            <div className="flex items-center gap-1.5 whitespace-nowrap text-xs">
+              <span className="text-gray-400">現在:</span>
+              <span className="font-medium text-blue-400">{activeSessionId}</span>
+              {historyIndex >= 0 && (
+                <span className="text-yellow-500">
+                  (履歴 {historyIndex + 1}/{history.length})
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* セパレーター */}
+          {activeSessionId && bufferButtons.length > 0 && (
+            <div className="h-4 w-px bg-gray-600" />
+          )}
+
+          {/* バッファ取得ボタン */}
           {bufferButtons.length > 0 ? (
             bufferButtons.map((num) => (
               <button
                 key={num}
                 onClick={() => fetchBuffer(num)}
                 aria-label={`セッション${num}のバッファを取得`}
-                className="flex h-8 w-8 items-center justify-center rounded bg-gray-700 text-sm font-medium hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gray-700 text-xs font-medium hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 {num}
               </button>
             ))
           ) : (
-            <span className="text-xs text-gray-500">セッションなし</span>
+            !activeSessionId && <span className="text-xs text-gray-500">セッションなし</span>
           )}
         </div>
 
         {/* 右側: アクションボタン */}
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <button
             onClick={sendToCurrentSession}
             disabled={!activeSessionId || !inputValue.trim() || isSending}
             title="現在のセッションに送信 (Ctrl+Enter)"
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-blue-600 px-2 py-1 text-xs font-medium hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Send
           </button>
@@ -320,7 +339,7 @@ export default function ChatPane() {
             onClick={broadcastToAll}
             disabled={sessions.length === 0 || !inputValue.trim() || isSending}
             title="全セッションに送信"
-            className="rounded bg-green-600 px-3 py-1.5 text-sm font-medium hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-green-600 px-2 py-1 text-xs font-medium hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Broadcast
           </button>
@@ -328,7 +347,7 @@ export default function ChatPane() {
             onClick={clearInput}
             disabled={!inputValue}
             title="クリア"
-            className="rounded bg-gray-700 px-3 py-1.5 text-sm font-medium hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+            className="rounded bg-gray-700 px-2 py-1 text-xs font-medium hover:bg-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
           >
             ×
           </button>
@@ -355,18 +374,6 @@ export default function ChatPane() {
           style={{ minHeight: '80px', maxHeight: '30vh' }}
           aria-label="メッセージ入力欄"
         />
-        <div className="mt-1 text-xs text-gray-500">
-          {activeSessionId && (
-            <>
-              現在のセッション: <span className="text-blue-400">{activeSessionId}</span>
-              {historyIndex >= 0 && (
-                <span className="ml-2 text-yellow-500">
-                  (履歴 {historyIndex + 1}/{history.length})
-                </span>
-              )}
-            </>
-          )}
-        </div>
       </div>
     </div>
   );
