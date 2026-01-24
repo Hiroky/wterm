@@ -31,11 +31,11 @@ npm install
 ### 起動
 
 ```bash
-# 方法1: npmで実行
-npm start
+# 方法1: バッチファイルで実行（推奨）
+start.bat
 
-# 方法2: バッチファイルで実行（推奨）
-start.cmd
+# 方法2: ビルド込みで起動
+start.bat --build
 ```
 
 サーバーが起動すると、自動的にブラウザが開きます（http://localhost:3000）。
@@ -125,7 +125,8 @@ wterm/
 │   └── wterm-list.js      # 一覧表示コマンド
 ├── config.json        # 設定ファイル
 ├── package.json
-└── start.cmd          # 起動スクリプト
+├── build.bat          # インストール + ビルド
+└── start.bat          # 起動スクリプト
 ```
 
 ## 技術スタック

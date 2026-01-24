@@ -16,29 +16,28 @@ wtermをネイティブアプリのような独立ウィンドウで起動しま
 
 ## 起動方法
 
-### 方法1：start.cmd（推奨）
+### 方法1：start.bat（推奨）
 
-デスクトップまたはエクスプローラーから`start.cmd`をダブルクリック。
+デスクトップまたはエクスプローラーから`start.bat`をダブルクリック。
 
 ```cmd
-start.cmd
+start.bat
 ```
 
 これにより：
-1. 依存関係を自動インストール
-2. フロントエンドをビルド
-3. バックエンドを起動
-4. **自動的にWebViewウィンドウが開く**
-5. **起動プロンプトは自動でクローズ**
+1. （必要な場合は）`build.bat`で依存関係をインストール/ビルド
+2. バックエンドを起動
+3. **自動的にWebViewウィンドウが開く**
+4. **起動プロンプトは自動でクローズ**
 
 ### 方法2：コマンドライン
 
 ```powershell
-# WebView2モードで起動
-npm run start:webview
+# WebView2モードで起動（ビルドなし）
+start.bat
 
-# 通常モード（デフォルトブラウザで開く）
-npm start
+# ビルド込みで起動
+start.bat --build
 
 # 開発モード（ブラウザは開かない）
 npm run dev
@@ -90,7 +89,7 @@ const edgeArgs = [
 
 ### 常にWebView2モードで起動
 
-現在の`start.cmd`は既にWebView2モードがデフォルトです。
+現在の`start.bat`は既にWebView2モードがデフォルトです。
 
 通常モードに戻したい場合：
 ```cmd
@@ -122,7 +121,7 @@ npm run dev  # WebViewは開かない
 
 **解決策:**
 ```powershell
-npm run start:webview  # これを使う
+start.bat --build  # これを使う
 ```
 
 **原因2: 既にサーバーが起動中**
@@ -144,7 +143,7 @@ netstat -ano | findstr :3000
 **確認:**
 ```powershell
 # コンソールに "WebView2モードで起動中..." が表示されるか確認
-npm run start:webview
+start.bat --build
 ```
 
 ---
@@ -170,13 +169,13 @@ Edgeの`--app`フラグを使用すると、ブラウザUIを非表示にして�
 ### 初回セットアップ
 
 1. リポジトリをクローン
-2. `start.cmd`をダブルクリック
+2. `start.bat`をダブルクリック
 3. 自動的にWebViewウィンドウが開く
-4. （オプション）`start.cmd`のショートカットをデスクトップに作成
+4. （オプション）`start.bat`のショートカットをデスクトップに作成
 
 ### 日常使用
 
-1. デスクトップの`start.cmd`ショートカットをダブルクリック
+1. デスクトップの`start.bat`ショートカットをダブルクリック
 2. すぐにwtermが使える
 
 ### 開発時
