@@ -1,24 +1,32 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import useStore from '../../store';
 import { sendFromBrowser, broadcastFromBrowser } from '../../utils/sendMessage';
-import { getTerminalBuffer } from '../../utils/terminalRegistry';
 
-// セッションごとのバッファ追跡状態
-interface SessionBufferState {
-  sentAtLine: number;    // 送信時点のバッファ行番号
-  sentCommand: string;   // 送信したコマンド文字列
+// バッファ取得API（バックエンドで追跡データを使用）
+async function fetchBufferFromApi(sessionId: string): Promise<string> {
+  try {
+    const response = await fetch(`/api/sessions/${sessionId}/buffer?clean=true`);
+    if (!response.ok) {
+      return '';
+    }
+    const result = await response.json();
+    return result.content || '';
+  } catch {
+    return '';
+  }
 }
 
-// バッファプレビューツールチップコンポーネント
+// バッファプレビューツールチップコンポーネント（非同期対応）
 function BufferPreviewTooltip({
   children,
-  contentProvider,
+  sessionId,
 }: {
   children: React.ReactNode;
-  contentProvider: () => string;
+  sessionId: string;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [content, setContent] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [maxHeight, setMaxHeight] = useState(200);
   const [alignment, setAlignment] = useState<'center' | 'left' | 'right'>('center');
@@ -35,28 +43,24 @@ function BufferPreviewTooltip({
     clearHideTimeout();
     hideTimeoutRef.current = window.setTimeout(() => {
       setIsVisible(false);
-    }, 100); // 100msの猶予でツールチップに移動可能
+    }, 100);
   };
 
-  const handleMouseEnter = (e: React.MouseEvent) => {
+  const handleMouseEnter = async (e: React.MouseEvent) => {
     clearHideTimeout();
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const buttonCenterX = rect.left + rect.width / 2;
     const viewportWidth = window.innerWidth;
-    const tooltipMaxWidth = viewportWidth * 0.8; // 80vw
-    const margin = 16; // 画面端からのマージン
+    const tooltipMaxWidth = viewportWidth * 0.8;
+    const margin = 16;
 
-    // ツールチップの配置を決定
-    // 左端に近い場合は左寄せ、右端に近い場合は右寄せ、それ以外は中央
     let xPos = buttonCenterX;
     let align: 'center' | 'left' | 'right' = 'center';
 
     if (buttonCenterX < tooltipMaxWidth / 2 + margin) {
-      // 左端に近い: 左寄せ
       xPos = margin;
       align = 'left';
     } else if (buttonCenterX > viewportWidth - tooltipMaxWidth / 2 - margin) {
-      // 右端に近い: 右寄せ
       xPos = viewportWidth - margin;
       align = 'right';
     }
@@ -64,12 +68,16 @@ function BufferPreviewTooltip({
     setPosition({ x: xPos, y: rect.top - 8 });
     setAlignment(align);
 
-    // 画面上部の空きスペースに応じて最大高さを動的に設定
-    const availableHeight = rect.top - 32; // 32pxのマージン
+    const availableHeight = rect.top - 32;
     setMaxHeight(Math.max(100, Math.min(availableHeight, 400)));
-    // ホバー時に内容を取得
-    setContent(contentProvider());
+
     setIsVisible(true);
+    setIsLoading(true);
+
+    // APIからバッファを取得
+    const bufferContent = await fetchBufferFromApi(sessionId);
+    setContent(bufferContent || '(新しい内容なし)');
+    setIsLoading(false);
   };
 
   const handleTooltipMouseEnter = () => {
@@ -80,22 +88,21 @@ function BufferPreviewTooltip({
     setIsVisible(false);
   };
 
-  // 配置に応じたtransformクラス
   const getTransformClass = () => {
     switch (alignment) {
       case 'left':
-        return '-translate-y-full'; // 左寄せ: X方向の移動なし
+        return '-translate-y-full';
       case 'right':
-        return '-translate-x-full -translate-y-full'; // 右寄せ: 100%左に移動
+        return '-translate-x-full -translate-y-full';
       default:
-        return '-translate-x-1/2 -translate-y-full'; // 中央: 50%左に移動
+        return '-translate-x-1/2 -translate-y-full';
     }
   };
 
   return (
     <div onMouseEnter={handleMouseEnter} onMouseLeave={scheduleHide} className="relative">
       {children}
-      {isVisible && content && (
+      {isVisible && (
         <div
           onMouseEnter={handleTooltipMouseEnter}
           onMouseLeave={handleTooltipMouseLeave}
@@ -110,9 +117,8 @@ function BufferPreviewTooltip({
             className="overflow-y-auto whitespace-pre-wrap break-words text-gray-200"
             style={{ maxHeight: `${maxHeight}px` }}
           >
-            {content}
+            {isLoading ? '読み込み中...' : content}
           </div>
-          {/* 三角形の矢印は配置によって位置を変更 */}
           <div
             className={`absolute top-full border-4 border-transparent border-t-gray-900 ${
               alignment === 'left'
@@ -131,9 +137,6 @@ function BufferPreviewTooltip({
 // localStorage keys
 const HISTORY_KEY = 'wterm-chat-history';
 const MAX_HISTORY = 50;
-
-// バッファ追跡状態をモジュールレベルで保持（ワークスペース切り替えでもリセットされない）
-const globalBufferTracking: Map<string, SessionBufferState> = new Map();
 
 function loadHistory(): string[] {
   try {
@@ -163,7 +166,7 @@ export default function ChatPane() {
   const [toast, setToast] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const tempInputRef = useRef<string>(''); // 履歴ナビゲーション用の一時保存
+  const tempInputRef = useRef<string>('');
 
   // テキストエリアの高さ自動調整
   useEffect(() => {
@@ -171,7 +174,7 @@ export default function ChatPane() {
       textareaRef.current.style.height = 'auto';
       const scrollHeight = textareaRef.current.scrollHeight;
       const maxHeight = window.innerHeight * 0.3;
-      const minHeight = 80; // 約3行
+      const minHeight = 80;
       textareaRef.current.style.height = `${Math.min(Math.max(scrollHeight, minHeight), maxHeight)}px`;
     }
   }, [inputValue]);
@@ -193,7 +196,7 @@ export default function ChatPane() {
     setHistoryIndex(-1);
   }, []);
 
-  // セッション番号からセッションIDを取得 (1 -> session-1)
+  // セッション番号からセッションIDを取得
   const getSessionIdFromNumber = (num: number): string => `session-${num}`;
 
   // セッションが存在するか確認
@@ -201,24 +204,10 @@ export default function ChatPane() {
     return sessions.some((s) => s.id === sessionId);
   };
 
-  // 送信時にバッファ位置と送信コマンドを記録（グローバルMapに保存）
-  const recordSentPosition = useCallback((sessionId: string, command: string) => {
-    const result = getTerminalBuffer(sessionId, 0);
-    if (result) {
-      globalBufferTracking.set(sessionId, {
-        sentAtLine: result.currentLine,
-        sentCommand: command,
-      });
-    }
-  }, []);
-
-  // 特定のセッションに送信
+  // 特定のセッションに送信（バックエンドで位置追跡される）
   const sendToSession = useCallback(
     async (sessionId: string) => {
       if (!sessionExists(sessionId) || !inputValue.trim() || isSending) return;
-
-      // 送信前にこのセッションのバッファ位置を記録（他セッションはそのまま保持）
-      recordSentPosition(sessionId, inputValue);
 
       setIsSending(true);
       try {
@@ -233,7 +222,7 @@ export default function ChatPane() {
         setIsSending(false);
       }
     },
-    [inputValue, isSending, addToHistory, sessions, showToast, recordSentPosition]
+    [inputValue, isSending, addToHistory, sessions, showToast]
   );
 
   // 現在のセッションに送信
@@ -251,12 +240,9 @@ export default function ChatPane() {
     [sendToSession]
   );
 
-  // 全セッションにブロードキャスト
+  // 全セッションにブロードキャスト（バックエンドで全セッションの位置追跡される）
   const broadcastToAll = useCallback(async () => {
     if (!inputValue.trim() || isSending || sessions.length === 0) return;
-
-    // 送信前に全セッションのバッファ位置を記録
-    sessions.forEach((session) => recordSentPosition(session.id, inputValue));
 
     setIsSending(true);
     try {
@@ -270,47 +256,18 @@ export default function ChatPane() {
     } finally {
       setIsSending(false);
     }
-  }, [inputValue, isSending, sessions, addToHistory, showToast, recordSentPosition]);
+  }, [inputValue, isSending, sessions, addToHistory, showToast]);
 
-  // バッファ内容を取得する共通ロジック（取得ボタンとツールチップで共有）
-  // 位置の更新は行わない（送信時のみ更新）
-  const getBufferContent = useCallback((sessionId: string): string => {
-    const tracking = globalBufferTracking.get(sessionId);
-    // 送信したことがある場合はその位置から、ない場合は先頭から取得
-    const fromLine = tracking ? tracking.sentAtLine : 0;
-
-    const result = getTerminalBuffer(sessionId, fromLine);
-    if (!result || !result.content) {
-      return '';
-    }
-
-    let content = result.content;
-
-    // 送信コマンドがバッファ先頭にあれば削除
-    if (tracking && tracking.sentCommand && content.startsWith(tracking.sentCommand)) {
-      content = content.slice(tracking.sentCommand.length);
-    }
-
-    // 先頭と末尾の改行をトリム
-    content = content.trim();
-
-    // 連続する空行（2行以上）を1行にまとめる
-    content = content.replace(/\n{3,}/g, '\n\n');
-
-    return content;
-  }, []);
-
-  // バッファ取得（xterm.jsのバッファから直接取得、エスケープシーケンス除去済み）
-  // 取得ボタンを何回押しても同じ範囲を取得（位置更新は送信時のみ）
+  // バッファ取得（API経由）
   const fetchBuffer = useCallback(
-    (sessionNum: number) => {
+    async (sessionNum: number) => {
       const sessionId = getSessionIdFromNumber(sessionNum);
       if (!sessionExists(sessionId)) {
         showToast(`セッション${sessionNum}は存在しません`);
         return;
       }
 
-      const content = getBufferContent(sessionId);
+      const content = await fetchBufferFromApi(sessionId);
 
       if (content && content.length > 0) {
         // テキストエリアの末尾に追加
@@ -320,7 +277,7 @@ export default function ChatPane() {
       // フォーカスをテキストエリアに移動
       textareaRef.current?.focus();
     },
-    [getBufferContent, sessions, showToast]
+    [sessions, showToast]
   );
 
   // クリア
@@ -460,14 +417,8 @@ export default function ChatPane() {
           {bufferButtons.length > 0 ? (
             bufferButtons.map((num) => {
               const sessionId = getSessionIdFromNumber(num);
-              // ツールチップ用：ホバー時に取得可能な内容を返す
-              const getTooltipContent = () => {
-                const content = getBufferContent(sessionId);
-                return content || '(新しい内容なし)';
-              };
-
               return (
-                <BufferPreviewTooltip key={num} contentProvider={getTooltipContent}>
+                <BufferPreviewTooltip key={num} sessionId={sessionId}>
                   <button
                     onClick={() => fetchBuffer(num)}
                     aria-label={`セッション${num}のバッファを取得`}

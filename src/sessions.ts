@@ -422,6 +422,34 @@ export function restartSession(sessionId: string): boolean {
 // 入力バッファ（コマンド検出用）
 const inputBuffers = new Map<string, string>();
 
+// バッファ追跡状態（送信時の位置を記録）
+interface BufferTracking {
+  sentAtPosition: number;  // 送信時点のバッファ位置（バイト単位）
+  sentCommand: string;     // 送信したコマンド
+}
+const bufferTrackingMap = new Map<string, BufferTracking>();
+
+/**
+ * 送信時にバッファ位置を記録
+ */
+function recordBufferPosition(sessionId: string, command: string): void {
+  const session = sessions.get(sessionId);
+  if (!session) return;
+
+  const fullBuffer = session.outputBuffer.join('');
+  bufferTrackingMap.set(sessionId, {
+    sentAtPosition: fullBuffer.length,
+    sentCommand: command,
+  });
+}
+
+/**
+ * バッファ追跡情報を取得
+ */
+export function getBufferTracking(sessionId: string): BufferTracking | undefined {
+  return bufferTrackingMap.get(sessionId);
+}
+
 /**
  * PTYのエラーを処理（Socket closedなどでプロセスが落ちないようにする）
  */
@@ -578,6 +606,7 @@ async function handleInternalCommand(sessionId: string, command: string): Promis
       safeWrite(session, '  wterm-broadcast <message>\r\n');
       safeWrite(session, '  wterm-list\r\n');
       safeWrite(session, '  wterm-start [command]         - カレントディレクトリを引き継いで新セッション作成\r\n');
+      safeWrite(session, '  wterm-buffer [session-id]     - セッションのバッファ内容を取得\r\n');
       safeWrite(session, '\r\n');
     }
     return true;
@@ -665,6 +694,67 @@ export function getSessionBufferRange(sessionId: string, fromPosition: number = 
   const fullBuffer = session.outputBuffer.join('');
   const content = fullBuffer.substring(fromPosition);
   const currentPosition = fullBuffer.length;
+
+  return { content, currentPosition };
+}
+
+/**
+ * ANSIエスケープシーケンスを除去
+ */
+function stripAnsiEscapes(text: string): string {
+  // ANSIエスケープシーケンスを除去
+  // CSI sequences: ESC [ ... final byte
+  // OSC sequences: ESC ] ... ST (or BEL)
+  // Other sequences: ESC followed by various characters
+  return text
+    .replace(/\x1b\[[?]?[0-9;]*[a-zA-Z]/g, '')  // CSI sequences (including DEC private modes like ?25h, ?1004h)
+    .replace(/\x1b\][^\x07]*\x07/g, '')          // OSC sequences (BEL terminated)
+    .replace(/\x1b\][^\x1b]*\x1b\\/g, '')        // OSC sequences (ST terminated)
+    .replace(/\x1b[PX^_][^\x1b]*\x1b\\/g, '')    // DCS, SOS, PM, APC sequences
+    .replace(/\x1b[\x40-\x5f]/g, '')             // Fe sequences
+    .replace(/\x1b[\x60-\x7e]/g, '')             // Fs sequences
+    .replace(/\x1b[=>]/g, '')                    // DECKPAM/DECKPNM (keypad modes)
+    .replace(/\r/g, '');                         // Carriage returns
+}
+
+/**
+ * セッションの出力バッファをクリーンテキストで取得（エスケープシーケンス除去済み）
+ * @param sessionId セッションID
+ * @param fromPosition 取得開始位置（バイト単位）- 省略時は追跡データを使用
+ * @param sentCommand 除去する送信コマンド（オプション）- 省略時は追跡データを使用
+ */
+export function getCleanSessionBuffer(
+  sessionId: string,
+  fromPosition?: number,
+  sentCommand?: string
+): { content: string; currentPosition: number } | null {
+  const session = sessions.get(sessionId);
+  if (!session) {
+    return null;
+  }
+
+  // 追跡データを取得（引数が省略された場合に使用）
+  const tracking = bufferTrackingMap.get(sessionId);
+  const actualFromPosition = fromPosition ?? tracking?.sentAtPosition ?? 0;
+  const actualSentCommand = sentCommand ?? tracking?.sentCommand;
+
+  const fullBuffer = session.outputBuffer.join('');
+  const rawContent = fullBuffer.substring(actualFromPosition);
+  const currentPosition = fullBuffer.length;
+
+  // エスケープシーケンスを除去
+  let content = stripAnsiEscapes(rawContent);
+
+  // 送信コマンドが指定されていて、先頭にある場合は削除
+  if (actualSentCommand && content.startsWith(actualSentCommand)) {
+    content = content.slice(actualSentCommand.length);
+  }
+
+  // 先頭と末尾の改行をトリム
+  content = content.trim();
+
+  // 連続する空行（2行以上）を1行にまとめる
+  content = content.replace(/\n{3,}/g, '\n\n');
 
   return { content, currentPosition };
 }
@@ -805,6 +895,9 @@ export async function sendMessage(
   let output: string | undefined;
   if (waitForResponse && to !== 'all') {
     try {
+      // 送信前にバッファ位置を記録
+      recordBufferPosition(to, content);
+
       output = await waitForPrompt(
         to,
         async () => {
@@ -831,9 +924,11 @@ export async function sendMessage(
   } else {
     // レスポンス待機なしの場合は通常通り送信
     if (to === 'all') {
-      // ブロードキャスト
+      // ブロードキャスト - 全セッションのバッファ位置を記録
       for (const [sessionId, session] of sessions.entries()) {
         if (sessionId !== from && session.status === 'running') {
+          // 送信前にバッファ位置を記録
+          recordBufferPosition(sessionId, content);
           // 入力バッファを介さずに送信
           writeToSessionRaw(sessionId, content);
           // Enterキーの前に少し待つ
@@ -842,7 +937,8 @@ export async function sendMessage(
         }
       }
     } else {
-      // 特定セッションへ送信
+      // 特定セッションへ送信 - バッファ位置を記録
+      recordBufferPosition(to, content);
       // 入力バッファを介さずに送信
       writeToSessionRaw(to, content);
       // Enterキーの前に少し待つ

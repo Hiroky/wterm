@@ -12,6 +12,7 @@ import {
   resizeSession,
   getSessionBuffer,
   getSessionBufferRange,
+  getCleanSessionBuffer,
   sendMessage,
   getMessageHistory,
   getAvailableSessionIds,
@@ -280,14 +281,24 @@ async function handleApiRequest(req: any, res: any, path: string, corsHeaders: {
   }
 
   // セッションバッファ取得
+  // clean=true の場合: 追跡データを使用してエスケープ除去済みバッファを返す
+  // clean=false の場合: 生のバッファを返す（fromPosition指定可能）
   const bufferMatch = path.match(/^\/api\/sessions\/([^/]+)\/buffer$/);
   if (bufferMatch && req.method === 'GET') {
     const sessionId = bufferMatch[1];
     const url = new URL(req.url || '/', `http://${req.headers.host}`);
-    const fromPositionParam = url.searchParams.get('fromPosition');
-    const fromPosition = fromPositionParam ? parseInt(fromPositionParam, 10) : 0;
+    const clean = url.searchParams.get('clean') === 'true';
 
-    const result = getSessionBufferRange(sessionId, fromPosition);
+    let result;
+    if (clean) {
+      // クリーンモード: 追跡データを使用（パラメータ不要）
+      result = getCleanSessionBuffer(sessionId);
+    } else {
+      // 生モード: fromPositionを指定可能
+      const fromPositionParam = url.searchParams.get('fromPosition');
+      const fromPosition = fromPositionParam ? parseInt(fromPositionParam, 10) : 0;
+      result = getSessionBufferRange(sessionId, fromPosition);
+    }
 
     if (result === null) {
       res.writeHead(404, { ...corsHeaders, 'Content-Type': 'application/json' });
