@@ -3,16 +3,134 @@ import useStore from '../../store';
 import { sendFromBrowser, broadcastFromBrowser } from '../../utils/sendMessage';
 import { getTerminalBuffer } from '../../utils/terminalRegistry';
 
+// セッションごとのバッファ追跡状態
+interface SessionBufferState {
+  sentAtLine: number;    // 送信時点のバッファ行番号
+  sentCommand: string;   // 送信したコマンド文字列
+}
+
+// バッファプレビューツールチップコンポーネント
+function BufferPreviewTooltip({
+  children,
+  contentProvider,
+}: {
+  children: React.ReactNode;
+  contentProvider: () => string;
+}) {
+  const [isVisible, setIsVisible] = useState(false);
+  const [content, setContent] = useState('');
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [maxHeight, setMaxHeight] = useState(200);
+  const [alignment, setAlignment] = useState<'center' | 'left' | 'right'>('center');
+  const hideTimeoutRef = useRef<number | null>(null);
+
+  const clearHideTimeout = () => {
+    if (hideTimeoutRef.current !== null) {
+      clearTimeout(hideTimeoutRef.current);
+      hideTimeoutRef.current = null;
+    }
+  };
+
+  const scheduleHide = () => {
+    clearHideTimeout();
+    hideTimeoutRef.current = window.setTimeout(() => {
+      setIsVisible(false);
+    }, 100); // 100msの猶予でツールチップに移動可能
+  };
+
+  const handleMouseEnter = (e: React.MouseEvent) => {
+    clearHideTimeout();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const buttonCenterX = rect.left + rect.width / 2;
+    const viewportWidth = window.innerWidth;
+    const tooltipMaxWidth = viewportWidth * 0.8; // 80vw
+    const margin = 16; // 画面端からのマージン
+
+    // ツールチップの配置を決定
+    // 左端に近い場合は左寄せ、右端に近い場合は右寄せ、それ以外は中央
+    let xPos = buttonCenterX;
+    let align: 'center' | 'left' | 'right' = 'center';
+
+    if (buttonCenterX < tooltipMaxWidth / 2 + margin) {
+      // 左端に近い: 左寄せ
+      xPos = margin;
+      align = 'left';
+    } else if (buttonCenterX > viewportWidth - tooltipMaxWidth / 2 - margin) {
+      // 右端に近い: 右寄せ
+      xPos = viewportWidth - margin;
+      align = 'right';
+    }
+
+    setPosition({ x: xPos, y: rect.top - 8 });
+    setAlignment(align);
+
+    // 画面上部の空きスペースに応じて最大高さを動的に設定
+    const availableHeight = rect.top - 32; // 32pxのマージン
+    setMaxHeight(Math.max(100, Math.min(availableHeight, 400)));
+    // ホバー時に内容を取得
+    setContent(contentProvider());
+    setIsVisible(true);
+  };
+
+  const handleTooltipMouseEnter = () => {
+    clearHideTimeout();
+  };
+
+  const handleTooltipMouseLeave = () => {
+    setIsVisible(false);
+  };
+
+  // 配置に応じたtransformクラス
+  const getTransformClass = () => {
+    switch (alignment) {
+      case 'left':
+        return '-translate-y-full'; // 左寄せ: X方向の移動なし
+      case 'right':
+        return '-translate-x-full -translate-y-full'; // 右寄せ: 100%左に移動
+      default:
+        return '-translate-x-1/2 -translate-y-full'; // 中央: 50%左に移動
+    }
+  };
+
+  return (
+    <div onMouseEnter={handleMouseEnter} onMouseLeave={scheduleHide} className="relative">
+      {children}
+      {isVisible && content && (
+        <div
+          onMouseEnter={handleTooltipMouseEnter}
+          onMouseLeave={handleTooltipMouseLeave}
+          className={`fixed z-50 rounded-lg border border-blue-500/30 bg-gray-900 px-3 py-2 text-xs shadow-xl ${getTransformClass()}`}
+          style={{
+            left: `${position.x}px`,
+            top: `${position.y}px`,
+            maxWidth: '80vw',
+          }}
+        >
+          <div
+            className="overflow-y-auto whitespace-pre-wrap break-words text-gray-200"
+            style={{ maxHeight: `${maxHeight}px` }}
+          >
+            {content}
+          </div>
+          {/* 三角形の矢印は配置によって位置を変更 */}
+          <div
+            className={`absolute top-full border-4 border-transparent border-t-gray-900 ${
+              alignment === 'left'
+                ? 'left-4'
+                : alignment === 'right'
+                  ? 'right-4'
+                  : 'left-1/2 -translate-x-1/2'
+            }`}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
 // localStorage keys
 const HISTORY_KEY = 'wterm-chat-history';
 const MAX_HISTORY = 50;
-
-// sessionStorage key for buffer positions
-const BUFFER_POSITIONS_KEY = 'wterm-buffer-positions';
-
-interface BufferPositions {
-  [sessionId: string]: number;
-}
 
 function loadHistory(): string[] {
   try {
@@ -31,22 +149,6 @@ function saveHistory(items: string[]): void {
   localStorage.setItem(HISTORY_KEY, JSON.stringify({ items }));
 }
 
-function loadBufferPositions(): BufferPositions {
-  try {
-    const stored = sessionStorage.getItem(BUFFER_POSITIONS_KEY);
-    if (stored) {
-      return JSON.parse(stored);
-    }
-  } catch {
-    // ignore
-  }
-  return {};
-}
-
-function saveBufferPositions(positions: BufferPositions): void {
-  sessionStorage.setItem(BUFFER_POSITIONS_KEY, JSON.stringify(positions));
-}
-
 export default function ChatPane() {
   const sessions = useStore((state) => state.sessions);
   const activeSessionId = useStore((state) => state.activeSessionId);
@@ -54,9 +156,12 @@ export default function ChatPane() {
   const [inputValue, setInputValue] = useState('');
   const [history, setHistory] = useState<string[]>(loadHistory);
   const [historyIndex, setHistoryIndex] = useState(-1);
-  const [bufferPositions, setBufferPositions] = useState<BufferPositions>(loadBufferPositions);
   const [isSending, setIsSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // 各セッションの送信時点の状態を追跡（位置更新は送信時のみ）
+  const [bufferTracking, setBufferTracking] = useState<{
+    [sessionId: string]: SessionBufferState;
+  }>({});
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const tempInputRef = useRef<string>(''); // 履歴ナビゲーション用の一時保存
@@ -97,10 +202,27 @@ export default function ChatPane() {
     return sessions.some((s) => s.id === sessionId);
   };
 
+  // 送信時にバッファ位置と送信コマンドを記録
+  const recordSentPosition = useCallback((sessionId: string, command: string) => {
+    const result = getTerminalBuffer(sessionId, 0);
+    if (result) {
+      setBufferTracking((prev) => ({
+        ...prev,
+        [sessionId]: {
+          sentAtLine: result.currentLine,
+          sentCommand: command,
+        },
+      }));
+    }
+  }, []);
+
   // 特定のセッションに送信
   const sendToSession = useCallback(
     async (sessionId: string) => {
       if (!sessionExists(sessionId) || !inputValue.trim() || isSending) return;
+
+      // 送信前にこのセッションのバッファ位置を記録（他セッションはそのまま保持）
+      recordSentPosition(sessionId, inputValue);
 
       setIsSending(true);
       try {
@@ -115,7 +237,7 @@ export default function ChatPane() {
         setIsSending(false);
       }
     },
-    [inputValue, isSending, addToHistory, sessions, showToast]
+    [inputValue, isSending, addToHistory, sessions, showToast, recordSentPosition]
   );
 
   // 現在のセッションに送信
@@ -137,6 +259,9 @@ export default function ChatPane() {
   const broadcastToAll = useCallback(async () => {
     if (!inputValue.trim() || isSending || sessions.length === 0) return;
 
+    // 送信前に全セッションのバッファ位置を記録
+    sessions.forEach((session) => recordSentPosition(session.id, inputValue));
+
     setIsSending(true);
     try {
       const result = await broadcastFromBrowser(inputValue);
@@ -149,9 +274,41 @@ export default function ChatPane() {
     } finally {
       setIsSending(false);
     }
-  }, [inputValue, isSending, sessions.length, addToHistory, showToast]);
+  }, [inputValue, isSending, sessions, addToHistory, showToast, recordSentPosition]);
+
+  // バッファ内容を取得する共通ロジック（取得ボタンとツールチップで共有）
+  // 位置の更新は行わない（送信時のみ更新）
+  const getBufferContent = useCallback(
+    (sessionId: string): string => {
+      const tracking = bufferTracking[sessionId];
+      // 送信したことがある場合はその位置から、ない場合は先頭から取得
+      const fromLine = tracking ? tracking.sentAtLine : 0;
+
+      const result = getTerminalBuffer(sessionId, fromLine);
+      if (!result || !result.content) {
+        return '';
+      }
+
+      let content = result.content;
+
+      // 送信コマンドがバッファ先頭にあれば削除
+      if (tracking && tracking.sentCommand && content.startsWith(tracking.sentCommand)) {
+        content = content.slice(tracking.sentCommand.length);
+      }
+
+      // 先頭と末尾の改行をトリム
+      content = content.trim();
+
+      // 連続する空行（2行以上）を1行にまとめる
+      content = content.replace(/\n{3,}/g, '\n\n');
+
+      return content;
+    },
+    [bufferTracking]
+  );
 
   // バッファ取得（xterm.jsのバッファから直接取得、エスケープシーケンス除去済み）
+  // 取得ボタンを何回押しても同じ範囲を取得（位置更新は送信時のみ）
   const fetchBuffer = useCallback(
     (sessionNum: number) => {
       const sessionId = getSessionIdFromNumber(sessionNum);
@@ -160,31 +317,17 @@ export default function ChatPane() {
         return;
       }
 
-      // 前回取得した行番号を取得（初回は0）
-      const lastLineIndex = bufferPositions[sessionId] || 0;
+      const content = getBufferContent(sessionId);
 
-      // xterm.jsのバッファから直接取得
-      const result = getTerminalBuffer(sessionId, lastLineIndex);
-
-      if (!result) {
-        showToast('ターミナルが初期化されていません');
-        return;
-      }
-
-      if (result.content && result.content.length > 0) {
+      if (content && content.length > 0) {
         // テキストエリアの末尾に追加
-        setInputValue((prev) => prev + result.content);
-
-        // バッファ位置（行番号）を更新
-        const newPositions = { ...bufferPositions, [sessionId]: result.currentLine };
-        setBufferPositions(newPositions);
-        saveBufferPositions(newPositions);
+        setInputValue((prev) => prev + content);
       }
 
       // フォーカスをテキストエリアに移動
       textareaRef.current?.focus();
     },
-    [bufferPositions, sessions, showToast]
+    [getBufferContent, sessions, showToast]
   );
 
   // クリア
@@ -322,16 +465,26 @@ export default function ChatPane() {
 
           {/* バッファ取得ボタン */}
           {bufferButtons.length > 0 ? (
-            bufferButtons.map((num) => (
-              <button
-                key={num}
-                onClick={() => fetchBuffer(num)}
-                aria-label={`セッション${num}のバッファを取得`}
-                className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gray-700 text-xs font-medium hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {num}
-              </button>
-            ))
+            bufferButtons.map((num) => {
+              const sessionId = getSessionIdFromNumber(num);
+              // ツールチップ用：ホバー時に取得可能な内容を返す
+              const getTooltipContent = () => {
+                const content = getBufferContent(sessionId);
+                return content || '(新しい内容なし)';
+              };
+
+              return (
+                <BufferPreviewTooltip key={num} contentProvider={getTooltipContent}>
+                  <button
+                    onClick={() => fetchBuffer(num)}
+                    aria-label={`セッション${num}のバッファを取得`}
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-gray-700 text-xs font-medium hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    {num}
+                  </button>
+                </BufferPreviewTooltip>
+              );
+            })
           ) : (
             !activeSessionId && <span className="text-xs text-gray-500">セッションなし</span>
           )}
