@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState, useCallback, useEffect } from 'react';
 import useStore from '../../store';
 import type { Workspace, LayoutNode } from '../../types';
 import { insertSessionIntoTree, getAllSessionIds } from '../../utils/layoutTree';
@@ -10,6 +10,29 @@ export default function CompactWorkspaceList() {
   const activeSessionId = useStore((state) => state.activeSessionId);
   const setActiveWorkspace = useStore((state) => state.setActiveWorkspace);
   const setActiveSession = useStore((state) => state.setActiveSession);
+  const addWorkspace = useStore((state) => state.addWorkspace);
+
+  async function handleAddWorkspace() {
+    try {
+      const response = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: '新規ワークスペース',
+          icon: '📁',
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to create workspace');
+      }
+
+      const data = await response.json();
+      addWorkspace(data.workspace);
+    } catch (error) {
+      console.error('Error creating workspace:', error);
+    }
+  }
 
   async function handleWorkspaceClick(workspaceId: string) {
     setActiveWorkspace(workspaceId);
@@ -67,13 +90,24 @@ export default function CompactWorkspaceList() {
     const [isWorkspaceHovered, setIsWorkspaceHovered] = useState(false);
     const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
     const [isCreatingSession, setIsCreatingSession] = useState(false);
+    const [hideTimeoutId, setHideTimeoutId] = useState<NodeJS.Timeout | null>(null);
     const isActive = activeWorkspaceId === workspace.id;
     const updateWorkspace = useStore((state) => state.updateWorkspace);
     const updateLayout = useStore((state) => state.updateLayout);
     const wsSetActiveSession = useStore((state) => state.setActiveSession);
     const wsSetActiveWorkspace = useStore((state) => state.setActiveWorkspace);
+    const deleteWorkspace = useStore((state) => state.deleteWorkspace);
 
     function handleWorkspaceMouseEnter(event: React.MouseEvent<HTMLButtonElement>) {
+      // 既存のタイムアウトをクリア
+      if (hideTimeoutId) {
+        clearTimeout(hideTimeoutId);
+        setHideTimeoutId(null);
+      }
+
+      // セッションのツールチップを閉じる
+      setHoveredSessionId(null);
+
       const rect = event.currentTarget.getBoundingClientRect();
       setIsWorkspaceHovered(true);
       setTooltipPosition({
@@ -83,11 +117,36 @@ export default function CompactWorkspaceList() {
     }
 
     function handleWorkspaceMouseLeave() {
-      setIsWorkspaceHovered(false);
-      setTooltipPosition(null);
+      // 200ms後にツールチップを閉じる
+      const timeoutId = setTimeout(() => {
+        setIsWorkspaceHovered(false);
+        setTooltipPosition(null);
+        setHideTimeoutId(null);
+      }, 200);
+      setHideTimeoutId(timeoutId);
+    }
+
+    function handleTooltipMouseEnter() {
+      // ツールチップにマウスが入ったら、タイムアウトをクリア
+      if (hideTimeoutId) {
+        clearTimeout(hideTimeoutId);
+        setHideTimeoutId(null);
+      }
+      // セッションのツールチップを閉じる
+      setHoveredSessionId(null);
+      setIsWorkspaceHovered(true);
     }
 
     function handleSessionMouseEnter(sessionId: string, event: React.MouseEvent<HTMLDivElement>) {
+      // 既存のタイムアウトをクリア
+      if (hideTimeoutId) {
+        clearTimeout(hideTimeoutId);
+        setHideTimeoutId(null);
+      }
+
+      // ワークスペースのツールチップを閉じる
+      setIsWorkspaceHovered(false);
+
       const rect = event.currentTarget.getBoundingClientRect();
       setHoveredSessionId(sessionId);
       setTooltipPosition({
@@ -97,9 +156,53 @@ export default function CompactWorkspaceList() {
     }
 
     function handleSessionMouseLeave() {
-      setHoveredSessionId(null);
-      setTooltipPosition(null);
+      // 200ms後にツールチップを閉じる
+      const timeoutId = setTimeout(() => {
+        setHoveredSessionId(null);
+        setTooltipPosition(null);
+        setHideTimeoutId(null);
+      }, 200);
+      setHideTimeoutId(timeoutId);
     }
+
+    function handleSessionTooltipMouseEnter(sessionId: string) {
+      // ツールチップにマウスが入ったら、タイムアウトをクリア
+      if (hideTimeoutId) {
+        clearTimeout(hideTimeoutId);
+        setHideTimeoutId(null);
+      }
+      // ワークスペースのツールチップを閉じる
+      setIsWorkspaceHovered(false);
+      setHoveredSessionId(sessionId);
+    }
+
+    async function handleDeleteWorkspace() {
+      try {
+        const response = await fetch(`/api/workspaces/${workspace.id}`, {
+          method: 'DELETE',
+        });
+
+        if (!response.ok) {
+          const data = await response.json();
+          throw new Error(data.error || 'Failed to delete workspace');
+        }
+
+        deleteWorkspace(workspace.id);
+        setIsWorkspaceHovered(false);
+        setTooltipPosition(null);
+      } catch (error: any) {
+        console.error('Error deleting workspace:', error);
+      }
+    }
+
+    // クリーンアップ: コンポーネントがアンマウントされる時にタイムアウトをクリア
+    useEffect(() => {
+      return () => {
+        if (hideTimeoutId) {
+          clearTimeout(hideTimeoutId);
+        }
+      };
+    }, [hideTimeoutId]);
 
     const handleAddSession = useCallback(async () => {
       if (isCreatingSession) return;
@@ -197,12 +300,23 @@ export default function CompactWorkspaceList() {
         {/* Workspace Tooltip */}
         {isWorkspaceHovered && tooltipPosition && (
           <div
+            onMouseEnter={handleTooltipMouseEnter}
+            onMouseLeave={handleWorkspaceMouseLeave}
             className="fixed z-50 w-56 rounded-lg border border-gray-600 bg-gray-800 p-3 shadow-xl"
             style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
           >
-            <div className="mb-2 flex items-center gap-2">
-              <span className="text-xl">{workspace.icon}</span>
-              <span className="text-sm font-semibold">{workspace.name}</span>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{workspace.icon}</span>
+                <span className="text-sm font-semibold">{workspace.name}</span>
+              </div>
+              <button
+                onClick={handleDeleteWorkspace}
+                className="rounded p-1 text-xs text-gray-400 transition-colors hover:bg-red-600 hover:text-white"
+                title="Delete workspace"
+              >
+                ✕
+              </button>
             </div>
             <div className="space-y-1 text-xs text-gray-300">
               <div>
@@ -253,6 +367,8 @@ export default function CompactWorkspaceList() {
                 {/* Custom tooltip */}
                 {isHovered && tooltipPosition && (
                   <div
+                    onMouseEnter={() => handleSessionTooltipMouseEnter(session.id)}
+                    onMouseLeave={handleSessionMouseLeave}
                     className="fixed z-50 w-56 rounded-lg border border-gray-600 bg-gray-800 p-3 shadow-xl"
                     style={{ top: `${tooltipPosition.top}px`, left: `${tooltipPosition.left}px` }}
                   >
@@ -309,6 +425,18 @@ export default function CompactWorkspaceList() {
       {workspaces.map((workspace) => (
         <WorkspaceWithSessions key={workspace.id} workspace={workspace} />
       ))}
+
+      {/* Add Workspace Button */}
+      <div className="flex flex-col items-end pr-2">
+        <button
+          onClick={handleAddWorkspace}
+          title="Add new workspace"
+          className="flex h-12 w-12 items-center justify-center rounded bg-gray-700 text-2xl transition-colors hover:bg-gray-600"
+        >
+          +
+        </button>
+      </div>
+
       {workspaces.length === 0 && (
         <div className="px-2 text-center text-xs text-gray-400">
           <p>No workspaces</p>

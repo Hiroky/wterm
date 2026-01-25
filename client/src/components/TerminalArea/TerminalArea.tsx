@@ -79,6 +79,7 @@ export default function TerminalArea() {
     return (
       <div className="flex flex-1 flex-col overflow-hidden">
         <LayoutRenderer
+          key={activeWorkspace.id}
           layout={activeWorkspace.layout}
           onLayoutChange={(path, newSizes) => handleLayoutChange(activeWorkspace, path, newSizes)}
           isActive={true}

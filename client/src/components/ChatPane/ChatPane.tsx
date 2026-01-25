@@ -223,48 +223,60 @@ export default function ChatPane() {
         return;
       }
 
-      // 上キー: 前の履歴
+      // 上キー: 前の履歴（キャレットが先頭にいる時のみ）
       if (e.key === 'ArrowUp' && !e.shiftKey) {
-        e.preventDefault();
-        if (historyIndex === -1) {
-          // 現在の入力を一時保存
-          tempInputRef.current = inputValue;
-        }
-        if (historyIndex < history.length - 1) {
-          const newIndex = historyIndex + 1;
-          setHistoryIndex(newIndex);
-          setInputValue(history[newIndex]);
-          // キャレットを先頭に配置
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.selectionStart = 0;
-              textareaRef.current.selectionEnd = 0;
-            }
-          }, 0);
+        const cursorPosition = e.currentTarget.selectionStart;
+
+        // キャレットが先頭にある場合のみ履歴をたどる
+        if (cursorPosition === 0) {
+          e.preventDefault();
+          if (historyIndex === -1) {
+            // 現在の入力を一時保存
+            tempInputRef.current = inputValue;
+          }
+          if (historyIndex < history.length - 1) {
+            const newIndex = historyIndex + 1;
+            setHistoryIndex(newIndex);
+            setInputValue(history[newIndex]);
+            // キャレットを先頭に配置
+            setTimeout(() => {
+              if (textareaRef.current) {
+                textareaRef.current.selectionStart = 0;
+                textareaRef.current.selectionEnd = 0;
+              }
+            }, 0);
+          }
         }
         return;
       }
 
-      // 下キー: 次の履歴
+      // 下キー: 次の履歴（キャレットが末尾にいる時のみ）
       if (e.key === 'ArrowDown' && !e.shiftKey) {
         if (historyIndex >= 0) {
-          e.preventDefault();
-          if (historyIndex === 0) {
-            // 一時保存した入力に戻る
-            setHistoryIndex(-1);
-            setInputValue(tempInputRef.current);
-          } else {
-            const newIndex = historyIndex - 1;
-            setHistoryIndex(newIndex);
-            setInputValue(history[newIndex]);
-          }
-          // キャレットを先頭に配置
-          setTimeout(() => {
-            if (textareaRef.current) {
-              textareaRef.current.selectionStart = 0;
-              textareaRef.current.selectionEnd = 0;
+          const cursorPosition = e.currentTarget.selectionStart;
+          const textLength = inputValue.length;
+
+          // キャレットが末尾にある場合のみ履歴を進める
+          if (cursorPosition === textLength) {
+            e.preventDefault();
+            if (historyIndex === 0) {
+              // 一時保存した入力に戻る
+              setHistoryIndex(-1);
+              setInputValue(tempInputRef.current);
+            } else {
+              const newIndex = historyIndex - 1;
+              setHistoryIndex(newIndex);
+              setInputValue(history[newIndex]);
             }
-          }, 0);
+            // キャレットを末尾に配置
+            setTimeout(() => {
+              if (textareaRef.current) {
+                const length = textareaRef.current.value.length;
+                textareaRef.current.selectionStart = length;
+                textareaRef.current.selectionEnd = length;
+              }
+            }, 0);
+          }
         }
         return;
       }
