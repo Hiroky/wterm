@@ -95,9 +95,7 @@ wterm-list
   ],
   "uiLayout": {
     "showSidebar": true,
-    "showHistoryPanel": true,
-    "sidebarPosition": "left",
-    "defaultView": "tab"
+    "sidebarPosition": "left"
   }
 }
 ```

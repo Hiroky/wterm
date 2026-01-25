@@ -144,7 +144,6 @@ function App() {
   }
 
   const showSidebar = config.uiLayout?.showSidebar !== false;
-  const showHistoryPanel = config.uiLayout?.showHistoryPanel !== false;
   const sidebarPosition = config.uiLayout?.sidebarPosition || 'left';
 
   return (
@@ -155,7 +154,7 @@ function App() {
           {showSidebar && sidebarPosition === 'left' && <Sidebar />}
           <div className="flex flex-1 flex-col">
             <TerminalArea />
-            {showHistoryPanel && <ChatPane />}
+            <ChatPane />
           </div>
           {showSidebar && sidebarPosition === 'right' && <Sidebar />}
         </div>

@@ -36,9 +36,7 @@ export interface Shortcut {
 // UIレイアウト設定
 export interface UILayout {
   showSidebar: boolean;
-  showHistoryPanel: boolean;
   sidebarPosition: 'left' | 'right';
-  defaultView: 'tab' | 'split';
 }
 
 // ターミナル表示設定

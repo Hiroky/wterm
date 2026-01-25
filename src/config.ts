@@ -20,9 +20,7 @@ const DEFAULT_CONFIG: Config = {
   ],
   uiLayout: {
     showSidebar: true,
-    showHistoryPanel: true,
     sidebarPosition: 'left',
-    defaultView: 'tab',
   },
   terminal: {
     fontFamily: 'Cascadia Code',

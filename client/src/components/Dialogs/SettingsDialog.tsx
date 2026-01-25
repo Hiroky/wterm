@@ -27,9 +27,7 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
   // UI設定
   const [uiLayout, setUiLayout] = useState<UILayout>({
     showSidebar: true,
-    showHistoryPanel: true,
     sidebarPosition: 'left',
-    defaultView: 'split',
   });
 
   // ワークスペース設定（cwdの編集用）
@@ -221,23 +219,6 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                 />
               </div>
 
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-300">
-                  Show History Panel
-                </label>
-                <input
-                  type="checkbox"
-                  checked={uiLayout.showHistoryPanel}
-                  onChange={(e) =>
-                    setUiLayout({
-                      ...uiLayout,
-                      showHistoryPanel: e.target.checked,
-                    })
-                  }
-                  className="h-4 w-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500"
-                />
-              </div>
-
               <div>
                 <label className="mb-2 block text-sm font-medium text-gray-300">
                   Sidebar Position
@@ -268,40 +249,6 @@ export default function SettingsDialog({ isOpen, onClose }: SettingsDialogProps)
                       className="text-blue-500"
                     />
                     <span className="text-sm text-gray-300">Right</span>
-                  </label>
-                </div>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-gray-300">
-                  Default View
-                </label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="defaultView"
-                      value="split"
-                      checked={uiLayout.defaultView === 'split'}
-                      onChange={() =>
-                        setUiLayout({ ...uiLayout, defaultView: 'split' })
-                      }
-                      className="text-blue-500"
-                    />
-                    <span className="text-sm text-gray-300">Split View</span>
-                  </label>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="defaultView"
-                      value="tab"
-                      checked={uiLayout.defaultView === 'tab'}
-                      onChange={() =>
-                        setUiLayout({ ...uiLayout, defaultView: 'tab' })
-                      }
-                      className="text-blue-500"
-                    />
-                    <span className="text-sm text-gray-300">Tab View</span>
                   </label>
                 </div>
               </div>

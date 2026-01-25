@@ -278,7 +278,6 @@ PS> wterm-send invalid-session "test"
   ],
   "uiLayout": {
     "showSidebar": true,
-    "showHistoryPanel": true,
     "sidebarPosition": "left"
   }
 }
@@ -467,9 +466,7 @@ PS> wterm-send invalid-session "test"
   ],
   "uiLayout": {
     "showSidebar": true,
-    "showHistoryPanel": true,
-    "sidebarPosition": "left",
-    "defaultView": "tab"
+    "sidebarPosition": "left"
   }
 }
 ```
