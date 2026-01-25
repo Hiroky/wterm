@@ -74,17 +74,31 @@ export default function TerminalArea() {
     );
   }
 
-  // Render only the active workspace
-  if (activeWorkspace.layout) {
+  // レイアウトを持つワークスペースをフィルタリング
+  const workspacesWithLayout = workspaces.filter((w) => w.layout);
+
+  // 全ワークスペースをレンダリングし、非アクティブは非表示にする
+  // これによりターミナルインスタンスが保持され、バッファにアクセス可能になる
+  if (workspacesWithLayout.length > 0) {
     return (
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <LayoutRenderer
-          key={activeWorkspace.id}
-          layout={activeWorkspace.layout}
-          onLayoutChange={(path, newSizes) => handleLayoutChange(activeWorkspace, path, newSizes)}
-          isActive={true}
-          workspaceSessionIds={activeWorkspace.sessions}
-        />
+      <div className="flex flex-1 flex-col overflow-hidden relative">
+        {workspacesWithLayout.map((workspace) => {
+          const isActive = workspace.id === activeWorkspaceId;
+          return (
+            <div
+              key={workspace.id}
+              className={`absolute inset-0 ${isActive ? 'z-10' : 'z-0 pointer-events-none'}`}
+              style={{ visibility: isActive ? 'visible' : 'hidden' }}
+            >
+              <LayoutRenderer
+                layout={workspace.layout!}
+                onLayoutChange={(path, newSizes) => handleLayoutChange(workspace, path, newSizes)}
+                isActive={isActive}
+                workspaceSessionIds={workspace.sessions}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   }

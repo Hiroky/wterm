@@ -90,7 +90,7 @@ export default function CompactWorkspaceList() {
     const [isWorkspaceHovered, setIsWorkspaceHovered] = useState(false);
     const [tooltipPosition, setTooltipPosition] = useState<{ top: number; left: number } | null>(null);
     const [isCreatingSession, setIsCreatingSession] = useState(false);
-    const [hideTimeoutId, setHideTimeoutId] = useState<NodeJS.Timeout | null>(null);
+    const [hideTimeoutId, setHideTimeoutId] = useState<number | null>(null);
     const isActive = activeWorkspaceId === workspace.id;
     const updateWorkspace = useStore((state) => state.updateWorkspace);
     const updateLayout = useStore((state) => state.updateLayout);

@@ -132,6 +132,9 @@ function BufferPreviewTooltip({
 const HISTORY_KEY = 'wterm-chat-history';
 const MAX_HISTORY = 50;
 
+// バッファ追跡状態をモジュールレベルで保持（ワークスペース切り替えでもリセットされない）
+const globalBufferTracking: Map<string, SessionBufferState> = new Map();
+
 function loadHistory(): string[] {
   try {
     const stored = localStorage.getItem(HISTORY_KEY);
@@ -158,10 +161,6 @@ export default function ChatPane() {
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [isSending, setIsSending] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
-  // 各セッションの送信時点の状態を追跡（位置更新は送信時のみ）
-  const [bufferTracking, setBufferTracking] = useState<{
-    [sessionId: string]: SessionBufferState;
-  }>({});
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const tempInputRef = useRef<string>(''); // 履歴ナビゲーション用の一時保存
@@ -202,17 +201,14 @@ export default function ChatPane() {
     return sessions.some((s) => s.id === sessionId);
   };
 
-  // 送信時にバッファ位置と送信コマンドを記録
+  // 送信時にバッファ位置と送信コマンドを記録（グローバルMapに保存）
   const recordSentPosition = useCallback((sessionId: string, command: string) => {
     const result = getTerminalBuffer(sessionId, 0);
     if (result) {
-      setBufferTracking((prev) => ({
-        ...prev,
-        [sessionId]: {
-          sentAtLine: result.currentLine,
-          sentCommand: command,
-        },
-      }));
+      globalBufferTracking.set(sessionId, {
+        sentAtLine: result.currentLine,
+        sentCommand: command,
+      });
     }
   }, []);
 
@@ -278,34 +274,31 @@ export default function ChatPane() {
 
   // バッファ内容を取得する共通ロジック（取得ボタンとツールチップで共有）
   // 位置の更新は行わない（送信時のみ更新）
-  const getBufferContent = useCallback(
-    (sessionId: string): string => {
-      const tracking = bufferTracking[sessionId];
-      // 送信したことがある場合はその位置から、ない場合は先頭から取得
-      const fromLine = tracking ? tracking.sentAtLine : 0;
+  const getBufferContent = useCallback((sessionId: string): string => {
+    const tracking = globalBufferTracking.get(sessionId);
+    // 送信したことがある場合はその位置から、ない場合は先頭から取得
+    const fromLine = tracking ? tracking.sentAtLine : 0;
 
-      const result = getTerminalBuffer(sessionId, fromLine);
-      if (!result || !result.content) {
-        return '';
-      }
+    const result = getTerminalBuffer(sessionId, fromLine);
+    if (!result || !result.content) {
+      return '';
+    }
 
-      let content = result.content;
+    let content = result.content;
 
-      // 送信コマンドがバッファ先頭にあれば削除
-      if (tracking && tracking.sentCommand && content.startsWith(tracking.sentCommand)) {
-        content = content.slice(tracking.sentCommand.length);
-      }
+    // 送信コマンドがバッファ先頭にあれば削除
+    if (tracking && tracking.sentCommand && content.startsWith(tracking.sentCommand)) {
+      content = content.slice(tracking.sentCommand.length);
+    }
 
-      // 先頭と末尾の改行をトリム
-      content = content.trim();
+    // 先頭と末尾の改行をトリム
+    content = content.trim();
 
-      // 連続する空行（2行以上）を1行にまとめる
-      content = content.replace(/\n{3,}/g, '\n\n');
+    // 連続する空行（2行以上）を1行にまとめる
+    content = content.replace(/\n{3,}/g, '\n\n');
 
-      return content;
-    },
-    [bufferTracking]
-  );
+    return content;
+  }, []);
 
   // バッファ取得（xterm.jsのバッファから直接取得、エスケープシーケンス除去済み）
   // 取得ボタンを何回押しても同じ範囲を取得（位置更新は送信時のみ）
